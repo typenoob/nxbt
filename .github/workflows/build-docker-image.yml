@@ -15,8 +15,43 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        libc: ["gnu", "musl"]
-        arch: ["amd64", "arm64v8", "arm32v6", "arm32v7", "i386", "s390x"]
+        include:
+          - libc: gnu
+            os: debian:oldoldstable-slim
+            arch: amd64
+          - libc: gnu
+            os: debian:oldoldstable-slim
+            arch: arm64v8
+          - libc: gnu
+            os: debian:oldoldstable-slim
+            arch: arm32v6
+          - libc: gnu
+            os: debian:oldoldstable-slim
+            arch: arm32v7
+          - libc: gnu
+            os: debian:oldoldstable-slim
+            arch: i386
+          - libc: gnu
+            os: debian:oldoldstable-slim
+            arch: s390x
+          - libc: gnu
+            os: alpine:3.15
+            arch: amd64
+          - libc: gnu
+            os: alpine:3.15
+            arch: arm64v8
+          - libc: gnu
+            os: alpine:3.15
+            arch: arm32v6
+          - libc: gnu
+            os: alpine:3.15
+            arch: arm32v7
+          - libc: gnu
+            os: alpine:3.15
+            arch: i386
+          - libc: gnu
+            os: alpine:3.15
+            arch: s390x
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,14 +74,14 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./docker
-          platforms: busybox/${{ matrix.arch }}
+          platforms: ${{ matrix.os }}/${{ matrix.arch }}
           push: true
           tags: typenoob/nxbt:0.1-${{ matrix.libc }}
-          file: docker/${{ matrix.libc }}/Dockerfile
+          file: docker/${{ matrix.os }}/Dockerfile
       - name: Run the Docker image
-        run: docker run --platform busybox/{{ matrix.arch }}-dit --name temp-${{ matrix.arch }}-${{ matrix.libc }} nxbt:0.1-${{ matrix.libc }} sh
+        run: docker run --platform ${{ matrix.os }}/{{ matrix.arch }} -dit --name extract nxbt:0.1-${{ matrix.libc }} sh
       - name: Copy the elf file
-        run: sudo docker cp temp-${{ matrix.arch }}-${{ matrix.libc }}:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.arch }}-${{ matrix.libc }}
+        run: sudo docker cp extract:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.arch }}-${{ matrix.libc }}
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
