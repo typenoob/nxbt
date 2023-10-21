@@ -2,9 +2,9 @@ name: Docker Image CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: ["master"]
   pull_request:
-    branches: [ "master" ]
+    branches: ["master"]
 
 jobs:
   build:
@@ -22,9 +22,9 @@ jobs:
 
       - name: Build the Docker image
         run: docker build -t nxbt:0.1-musl -f docker/musl/Dockerfile ./docker
-      
+
       - name: run the Docker image
-        run: docker -dit --name temp nxbt:0.1-musl sh
+        run: docker run -dit --name temp nxbt:0.1-musl sh
 
       - name: Copy the elf file
         run: docker cp temp:/bin/nxbt /nxbt
@@ -34,4 +34,3 @@ jobs:
           name: nxbt
           path: |
             /nxbt
-    
