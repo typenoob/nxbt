@@ -24,11 +24,11 @@ jobs:
       - name: Build the Docker image
         run: docker build -t nxbt:0.1-musl -f docker/musl/Dockerfile ./docker
 
-      - name: run the Docker image
+      - name: Run the Docker image
         run: docker run -dit --name temp nxbt:0.1-musl sh
 
       - name: Copy the elf file
-        run: docker cp temp:/bin/nxbt /
+        run: sudo docker cp temp:/nxbt/build/cli/cli /nxbt
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
