@@ -16,42 +16,29 @@ jobs:
     strategy:
       matrix:
         include:
-          - libc: gnu
+          - libc: musl
+            platform: linux/386
+          - libc: musl
+            platform: linux/amd64
+          - libc: musl
+            platform: linux/arm/v6
+          - libc: musl
             os: linux
-            arch: amd64
+            platform: linux/arm/v7
+          - libc: musl
+            platform: linux/arm64/v8
+          - libc: musl
+            platform: linux/ppc64le
+          - libc: musl
+            platform: linux/s390x
           - libc: gnu
-            os: linux
-            arch: arm64v8
+            platform: linux/386
           - libc: gnu
-            os: linux
-            arch: arm32v6
+            platform: linux/amd64
           - libc: gnu
-            os: linux
-            arch: arm32v7
+            platform: linux/arm/v7
           - libc: gnu
-            os: linux
-            arch: i386
-          - libc: gnu
-            os: linux
-            arch: s390x
-          - libc: gnu
-            os: linux
-            arch: amd64
-          - libc: gnu
-            os: linux
-            arch: arm64v8
-          - libc: gnu
-            os: linux
-            arch: arm32v6
-          - libc: gnu
-            os: linux
-            arch: arm32v7
-          - libc: gnu
-            os: linux
-            arch: i386
-          - libc: gnu
-            os: linux
-            arch: s390x
+            platform: linux/arm64/v8
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,14 +61,14 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./docker
-          platforms: ${{ matrix.os }}/${{ matrix.arch }}
+          platforms: ${{ matrix.platform }}
           push: true
           tags: typenoob/nxbt:0.1-${{ matrix.libc }}
           file: docker/${{ matrix.libc }}/Dockerfile
       - name: Run the Docker image
-        run: docker run --platform ${{ matrix.os }}/{{ matrix.arch }} -dit --name extract nxbt:0.1-${{ matrix.libc }} sh
+        run: docker run --platform ${{ matrix.platform }} -dit --name extract nxbt:0.1-${{ matrix.libc }} sh
       - name: Copy the elf file
-        run: sudo docker cp extract:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.arch }}-${{ matrix.libc }}
+        run: sudo docker cp extract:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.platform }}-${{ matrix.libc }}
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
