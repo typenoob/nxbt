@@ -23,7 +23,6 @@ jobs:
           - libc: musl
             platform: linux/arm/v6
           - libc: musl
-            os: linux
             platform: linux/arm/v7
           - libc: musl
             platform: linux/arm64/v8
