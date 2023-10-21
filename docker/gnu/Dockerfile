@@ -1,4 +1,4 @@
-FROM debian:oldsoldtable-slim
+FROM debian:oldoldstable-slim
 COPY ./ /nxbt
 WORKDIR /nxbt
 RUN apt update \
