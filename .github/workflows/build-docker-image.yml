@@ -16,15 +16,7 @@ jobs:
     strategy:
       matrix:
         libc: ["gnu", "musl"]
-        arch:
-          [
-            "amd64",
-            "arm64v8",
-            "arm32v6",
-            "arm32v7",
-            "i386",
-            "s390x",
-          ]
+        arch: ["amd64", "arm64v8", "arm32v6", "arm32v7", "i386", "s390x"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,7 +44,7 @@ jobs:
           tags: typenoob/nxbt:0.1-${{ matrix.libc }}
           file: docker/${{ matrix.libc }}/Dockerfile
       - name: Run the Docker image
-        run: docker run --platform {{ matrix.arch }}-dit --name temp-${{ matrix.arch }}-${{ matrix.libc }} nxbt:0.1-${{ matrix.libc }} sh
+        run: docker run --platform busybox/{{ matrix.arch }}-dit --name temp-${{ matrix.arch }}-${{ matrix.libc }} nxbt:0.1-${{ matrix.libc }} sh
       - name: Copy the elf file
         run: sudo docker cp temp-${{ matrix.arch }}-${{ matrix.libc }}:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.arch }}-${{ matrix.libc }}
       - name: Archive production artifacts
