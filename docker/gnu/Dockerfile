@@ -6,7 +6,7 @@ RUN apt update \
     && python3 -m venv /venv 
 ENV PATH="/venv/bin:$PATH"
 RUN pip install nxbt pyinstaller \
-    && pyinstaller ./cli.py \
-    && cp ./build/cli/cli /bin/nxbt \
+    && pyinstaller -F ./cli.py \
+    && cp ./dist/cli /bin/nxbt \
     && chmod +x /bin/nxbt
 ENTRYPOINT ["nxbt"]
