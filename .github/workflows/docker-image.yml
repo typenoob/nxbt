@@ -12,6 +12,7 @@ jobs:
     strategy:
       matrix:
         libc: ["gnu", "musl"]
+        arch: ["linux/amd64", "linux/arm64"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,17 +35,17 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./docker
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.arch }}
           push: true
           tags: typenoob/nxbt:0.1-${{ matrix.libc }}
           file: docker/${{ matrix.libc }}/Dockerfile
       - name: Run the Docker image
-        run: docker run -dit --name temp nxbt:0.1-musl sh
+        run: docker run -dit --name temp-${{ matrix.arch }}-${{ matrix.libc }} nxbt:0.1-${{ matrix.libc }} sh
       - name: Copy the elf file
-        run: sudo docker cp temp:/nxbt/build/cli/cli /nxbt
+        run: sudo docker cp temp-${{ matrix.arch }}-${{ matrix.libc }}:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.arch }}-${{ matrix.libc }}
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: nxbt
+          name: artifacts
           path: |
-            /nxbt
+            /artifacts
