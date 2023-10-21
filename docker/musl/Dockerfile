@@ -1,5 +1,6 @@
 FROM alpine:3.15
 COPY ./ /
+RUN ls
 WORKDIR /docker
 RUN apk update \
     && apk add python3 python3-dev py3-pip py3-dbus dbus-glib-dev make gcc g++ musl-dev libffi-dev openssl-dev \
