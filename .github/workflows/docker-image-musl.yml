@@ -34,7 +34,7 @@ jobs:
           context: ./docker
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: 0.1-musl
+          tags: typenoob/0.1-musl
           file: docker/musl/Dockerfile
       - name: Run the Docker image
         run: docker run -dit --name temp nxbt:0.1-musl sh
