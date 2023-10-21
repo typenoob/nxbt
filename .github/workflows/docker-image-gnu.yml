@@ -15,4 +15,4 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Build the Docker image
-      run: docker build -t nxbt:0.1-gnu -f docker/gnu/Dockerfile .
+      run: docker build -t nxbt:0.1-gnu -f docker/gnu/Dockerfile ./nxbt
