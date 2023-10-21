@@ -78,7 +78,9 @@ jobs:
       - name: Create the container
         run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:0.1-${{ matrix.libc }}
       - name: Copy the elf file
-        run: sudo docker cp extract:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.id }}
+        run: |
+          mkdir /artifacts
+          sudo docker cp extract:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.id }}
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
