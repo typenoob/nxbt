@@ -1,4 +1,4 @@
-FROM debian:stable-slim
+FROM debian:oldstable-slim
 COPY ./ /nxbt
 WORKDIR /nxbt
 RUN apt update \
@@ -7,5 +7,5 @@ RUN apt update \
     && source /venv/bin/activate \
     && pip install nxbt pyinstaller \
     && pyinstaller ./cli.py \
-    && cp /dist/cli /bin/nxbt \
+    && cp ./dist/cli /bin/nxbt \
     && chmod +x /bin/nxbt
