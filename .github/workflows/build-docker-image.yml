@@ -54,7 +54,7 @@ jobs:
           tags: typenoob/nxbt:0.1-${{ matrix.libc }}
           file: docker/${{ matrix.libc }}/Dockerfile
       - name: Run the Docker image
-        run: docker run -dit --name temp-${{ matrix.arch }}-${{ matrix.libc }} nxbt:0.1-${{ matrix.libc }} sh
+        run: docker run --platform {{ matrix.arch }}-dit --name temp-${{ matrix.arch }}-${{ matrix.libc }} nxbt:0.1-${{ matrix.libc }} sh
       - name: Copy the elf file
         run: sudo docker cp temp-${{ matrix.arch }}-${{ matrix.libc }}:/nxbt/build/cli/cli /artifacts/nxbt-${{ matrix.arch }}-${{ matrix.libc }}
       - name: Archive production artifacts
