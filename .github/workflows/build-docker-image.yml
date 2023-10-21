@@ -86,3 +86,10 @@ jobs:
           name: artifacts
           path: |
             /nxbt-${{ matrix.id }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            /nxbt-${{ matrix.id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
