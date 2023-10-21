@@ -7,7 +7,8 @@ RUN python3 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 RUN pip install nxbt pyinstaller \
     && pyinstaller ./cli.py
-RUN cp ./dist/cli /bin/nxbt
+RUN ls ./build/cli
+RUN cp ./build/cli/cli /bin/nxbt
 RUN chmod +x /bin/nxbt
 RUN ls
 ENTRYPOINT ["nxbt"]
