@@ -3,6 +3,9 @@ name: Docker Image CI
 on:
   push:
     branches: ["master"]
+    paths-ignore:
+      - "README.md"
+      - ".github/**"
   pull_request:
     branches: ["master"]
 
@@ -12,7 +15,17 @@ jobs:
     strategy:
       matrix:
         libc: ["gnu", "musl"]
-        arch: ["linux/amd64", "linux/arm64"]
+        arch:
+          [
+            "amd64",
+            "arm64v8",
+            "arm32v5",
+            "arm32v6",
+            "arm32v7",
+            "i386",
+            "ppc64le",
+            "s390x",
+          ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,7 +48,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ./docker
-          platforms: ${{ matrix.arch }}
+          platforms: busybox/${{ matrix.arch }}
           push: true
           tags: typenoob/nxbt:0.1-${{ matrix.libc }}
           file: docker/${{ matrix.libc }}/Dockerfile
