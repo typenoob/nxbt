@@ -18,37 +18,37 @@ jobs:
         include:
           - libc: musl
             platform: linux/386
-            id: i386-musl
+            id: musl-i386
           - libc: musl
             platform: linux/amd64
-            id: amd64-musl
+            id: musl-amd64
           - libc: musl
             platform: linux/arm/v6
-            id: armv6-musl
+            id: musl-armv6
           - libc: musl
             platform: linux/arm/v7
-            id: armv7-musl
+            id: musl-armv7
           - libc: musl
             platform: linux/arm64/v8
-            id: aarch64-musl
+            id: musl-aarch64
           - libc: musl
             platform: linux/ppc64le
-            id: ppc64le-musl
+            id: musl-ppc64le
           - libc: musl
             platform: linux/s390x
-            id: s390x-musl
+            id: musl-s390x
           - libc: gnu
             platform: linux/386
-            id: i386-gnu
+            id: gnu-i386
           - libc: gnu
             platform: linux/amd64
-            id: amd64-gnu
+            id: gnu-amd64
           - libc: gnu
             platform: linux/arm/v7
-            id: armv7-gnu
+            id: gnu-armv7
           - libc: gnu
             platform: linux/arm64/v8
-            id: aarch64-gnu
+            id: gnu-aarch64
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
           context: ./docker
           platforms: ${{ matrix.platform }}
           push: true
-          tags: typenoob/nxbt:0.1-${{ matrix.libc }}
+          tags: typenoob/nxbt:0.1-${{ matrix.id }}
           file: docker/${{ matrix.libc }}/Dockerfile
       - name: Create the container
         run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:0.1-${{ matrix.libc }}
