@@ -1,4 +1,6 @@
 FROM debian:stable-slim
+RUN COPY ./ /
+WORKDIR /docker
 RUN apt update \
     && apt install python3 python3-dev python3-pip ibdbus-glib-1-dev libdbus-1-dev \
     && python3 -m venv /venv \
