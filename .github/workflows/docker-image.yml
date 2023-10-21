@@ -9,7 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        libc: ["gnu", "musl"]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,8 +36,8 @@ jobs:
           context: ./docker
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: typenoob/0.1-musl
-          file: docker/musl/Dockerfile
+          tags: typenoob/0.1-${{ matrix.libc }}
+          file: docker/${{ matrix.libc }}/Dockerfile
       - name: Run the Docker image
         run: docker run -dit --name temp nxbt:0.1-musl sh
       - name: Copy the elf file
