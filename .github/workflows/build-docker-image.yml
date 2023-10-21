@@ -18,40 +18,40 @@ jobs:
       matrix:
         include:
           - libc: gnu
-            os: debian:oldoldstable-slim
+            os: debian
             arch: amd64
           - libc: gnu
-            os: debian:oldoldstable-slim
+            os: debian
             arch: arm64v8
           - libc: gnu
-            os: debian:oldoldstable-slim
+            os: debian
             arch: arm32v6
           - libc: gnu
-            os: debian:oldoldstable-slim
+            os: debian
             arch: arm32v7
           - libc: gnu
-            os: debian:oldoldstable-slim
+            os: debian
             arch: i386
           - libc: gnu
-            os: debian:oldoldstable-slim
+            os: debian
             arch: s390x
           - libc: gnu
-            os: alpine:3.15
+            os: alpine
             arch: amd64
           - libc: gnu
-            os: alpine:3.15
+            os: alpine
             arch: arm64v8
           - libc: gnu
-            os: alpine:3.15
+            os: alpine
             arch: arm32v6
           - libc: gnu
-            os: alpine:3.15
+            os: alpine
             arch: arm32v7
           - libc: gnu
-            os: alpine:3.15
+            os: alpine
             arch: i386
           - libc: gnu
-            os: alpine:3.15
+            os: alpine
             arch: s390x
     steps:
       - name: Checkout
@@ -78,7 +78,7 @@ jobs:
           platforms: ${{ matrix.os }}/${{ matrix.arch }}
           push: true
           tags: typenoob/nxbt:0.1-${{ matrix.libc }}
-          file: docker/${{ matrix.os }}/Dockerfile
+          file: docker/${{ matrix.libc }}/Dockerfile
       - name: Run the Docker image
         run: docker run --platform ${{ matrix.os }}/{{ matrix.arch }} -dit --name extract nxbt:0.1-${{ matrix.libc }} sh
       - name: Copy the elf file
