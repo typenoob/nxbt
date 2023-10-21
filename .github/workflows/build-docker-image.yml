@@ -76,7 +76,7 @@ jobs:
           tags: typenoob/nxbt:0.1-${{ matrix.id }}
           file: docker/${{ matrix.libc }}/Dockerfile
       - name: Create the container
-        run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:0.1-${{ matrix.libc }}
+        run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:0.1-${{ matrix.id }}
       - name: Copy the elf file
         run: |
           sudo mkdir /artifacts
