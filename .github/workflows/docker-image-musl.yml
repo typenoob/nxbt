@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout
-      - uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       # In this step, this action saves a list of existing images,
       # the cache is created without them in the post run.
