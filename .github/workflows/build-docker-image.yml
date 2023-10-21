@@ -17,40 +17,40 @@ jobs:
       matrix:
         include:
           - libc: gnu
-            os: debian
+            os: linux
             arch: amd64
           - libc: gnu
-            os: debian
+            os: linux
             arch: arm64v8
           - libc: gnu
-            os: debian
+            os: linux
             arch: arm32v6
           - libc: gnu
-            os: debian
+            os: linux
             arch: arm32v7
           - libc: gnu
-            os: debian
+            os: linux
             arch: i386
           - libc: gnu
-            os: debian
+            os: linux
             arch: s390x
           - libc: gnu
-            os: alpine
+            os: linux
             arch: amd64
           - libc: gnu
-            os: alpine
+            os: linux
             arch: arm64v8
           - libc: gnu
-            os: alpine
+            os: linux
             arch: arm32v6
           - libc: gnu
-            os: alpine
+            os: linux
             arch: arm32v7
           - libc: gnu
-            os: alpine
+            os: linux
             arch: i386
           - libc: gnu
-            os: alpine
+            os: linux
             arch: s390x
     steps:
       - name: Checkout
