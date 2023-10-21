@@ -1,4 +1,4 @@
-FROM debian:oldstable-slim
+FROM debian:oldsoldtable-slim
 COPY ./ /nxbt
 WORKDIR /nxbt
 RUN apt update \
@@ -8,5 +8,6 @@ RUN apt update \
     && pip install nxbt pyinstaller \
     && pyinstaller ./cli.py \
     && cp ./dist/cli /bin/nxbt \
-    && chmod +x /bin/nxbt
+    && chmod +x /bin/nxbt \
+    && ls
 ENTRYPOINT ["nxbt"]
