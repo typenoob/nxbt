@@ -86,4 +86,4 @@ jobs:
         with:
           name: artifacts
           path: |
-            /artifacts
+            /artifacts/nxbt-${{ matrix.id }}
