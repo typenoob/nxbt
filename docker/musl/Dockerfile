@@ -9,3 +9,4 @@ RUN apk update \
     && pyinstaller ./cli.py \
     && cp ./dist/cli /bin/nxbt \
     && chmod +x /bin/nxbt
+ENTRYPOINT ["nxbt"]
