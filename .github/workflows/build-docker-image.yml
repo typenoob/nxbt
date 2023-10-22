@@ -139,5 +139,5 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Manifest
         run: |
-          docker manifest create $name/0.1-gnu $(echo $matrix | jq -r '[.[]|select(.libc=="gnu")|.id="$name/\(.id)"|.id]|join(" ")')
-          docker manifest create $name/0.1-musl $(echo $matrix | jq -r '[.[]|select(.libc=="musl")|.id="$name/\(.id)"|.id]|join(" ")')
+          docker manifest create $name/0.1-gnu $(echo $matrix | jq -r '[.[]|select(.libc=="gnu")|.id="typenoob/\(.id)"|.id]|join(" ")')
+          docker manifest create $name/0.1-musl $(echo $matrix | jq -r '[.[]|select(.libc=="musl")|.id="typenoob/\(.id)"|.id]|join(" ")')
