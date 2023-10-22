@@ -87,9 +87,14 @@ jobs:
           name: artifacts
           path: |
             /nxbt-${{ matrix.id }}
+      - name: Generate release tag
+        id: tag
+        run: |
+          echo "::set-output name=release_tag::Build_$(date +"%Y.%m.%d_%H-%M")"
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
           files: |
             /nxbt-${{ matrix.id }}
         env:
