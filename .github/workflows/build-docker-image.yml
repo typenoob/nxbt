@@ -63,7 +63,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Manifest
         run: |
-          gnu_containers=$($matrix | jq -r '[.[]|select(.libc=="gnu")|.id="typenoob/\(.id)"|.id]|join(" ")')
-          musl_containers=$($matrix | jq -r '[.[]|select(.libc=="musl")|.id="typenoob/\(.id)"|.id]|join(" ")')
+          gnu_containers=$(echo $matrix | jq -r '[.[]|select(.libc=="gnu")|.id="typenoob/\(.id)"|.id]|join(" ")')
+          musl_containers=$(echo $matrix | jq -r '[.[]|select(.libc=="musl")|.id="typenoob/\(.id)"|.id]|join(" ")')
           docker manifest create typenoob/0.1-gnu $gnu_containers
           docker manifest create typenoob/0.1-musl $musl_containers
