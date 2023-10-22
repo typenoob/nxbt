@@ -99,3 +99,15 @@ jobs:
             /nxbt-${{ matrix.id }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Manifest
+        run: |
+          docker manifest create typenoob/0.1-gnu typenoob/0.1-gnu-i386 typenoob/0.1-gnu-amd64 typenoob/0.1-gnu-armv7 typenoob/0.1-gnu-aarch64
+          docker manifest create typenoob/0.1-musl typenoob/0.1-musl-i386 typenoob/0.1-musl-amd64 typenoob/0.1-musl-armv6 typenoob/0.1-musl-armv7 typenoob/0.1-musl-aarch64 typenoob/0.1-musl-ppc64le typenoob/0.1-musl-s390x
