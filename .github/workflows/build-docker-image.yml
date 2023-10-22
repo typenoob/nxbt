@@ -64,6 +64,54 @@ jobs:
           name: ${{ hashFiles('matrix') || 'none' }}
           path: matrix
           if-no-files-found: warn
+      - name: Checkout
+        uses: actions/checkout@v4
+      # In this step, this action saves a list of existing images,
+      # the cache is created without them in the post run.
+      # It also restores the cache if it exists.
+      - uses: satackey/action-docker-layer-caching@v0.0.11
+        # Ignore the failure of a step and avoid terminating the job.
+        continue-on-error: true
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./docker
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: typenoob/nxbt:0.1-${{ matrix.id }}
+          file: docker/${{ matrix.libc }}/Dockerfile
+      - name: Create the container
+        run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:0.1-${{ matrix.id }}
+      - name: Copy the elf file
+        run: |
+          sudo docker cp extract:/nxbt/dist/cli /nxbt-${{ matrix.id }}
+      - name: Archive production artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: artifacts
+          path: |
+            /nxbt-${{ matrix.id }}
+      - name: Generate release tag
+        id: tag
+        run: |
+          echo "::set-output name=release_tag::Build_$(date +"%Y.%m.%d")"
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.release_tag }}
+          files: |
+            /nxbt-${{ matrix.id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   check-matrix:
     runs-on: ubuntu-latest
