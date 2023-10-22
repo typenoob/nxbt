@@ -20,6 +20,9 @@ jobs:
           - libc: musl
             platform: linux/386
             id: musl-i386
+          - libc: musl
+            platform: linux/amd64
+            id: musl-amd64
     steps:
       - run: |
           matrix=$((
@@ -36,8 +39,8 @@ jobs:
           if-no-files-found: warn
 
   check-matrix:
-    runs-on:  ubuntu-22.04
-    needs: [ matrix ]
+    runs-on: ubuntu-22.04
+    needs: [matrix]
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
