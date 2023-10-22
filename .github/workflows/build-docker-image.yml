@@ -100,6 +100,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   manifest:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - name: Login to Docker Hub
@@ -110,5 +111,4 @@ jobs:
       - name: Manifest
         run: |
           echo ${{ job.build.strategy.matrix.id }}
-          docker manifest create typenoob/0.1-gnu typenoob/0.1-gnu-i386 typenoob/0.1-gnu-amd64 typenoob/0.1-gnu-armv7 typenoob/0.1-gnu-aarch64
-          docker manifest create typenoob/0.1-musl typenoob/0.1-musl-i386 typenoob/0.1-musl-amd64 typenoob/0.1-musl-armv6 typenoob/0.1-musl-armv7 typenoob/0.1-musl-aarch64 typenoob/0.1-musl-ppc64le typenoob/0.1-musl-s390x
+          docker manifest create ${{github.repository_owner}}
