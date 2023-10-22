@@ -51,7 +51,7 @@ jobs:
         id: matrix
 
   manifest:
-    needs: check-matrix
+    needs: [check-matrix]
     runs-on: ubuntu-latest
     env:
       test: ${{ fromJSON(needs.check-matrix.outputs.matrix) }}
