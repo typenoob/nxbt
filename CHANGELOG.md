@@ -12,4 +12,4 @@ Use following command to build your own image.
 
 ```docker build -t  [TAG_NAME] -f docker/[LIBC_KIND]/Dockerfile docker/gnu```
 
-You can use built image from [image](https://hub.docker.com/r/typenoob/nxbt) as well.
+You can use built image from [here](https://hub.docker.com/r/typenoob/nxbt) as well.
