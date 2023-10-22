@@ -24,10 +24,9 @@ jobs:
       - name: output
         id: output
         run: |
-          echo "${{ toJson(matrix) }}"
+          echo "output=${{ matrix.id }}" >> $GITHUB_OUTPUT
     outputs:
-      a: ${{ steps.output.outputs.a }}
-      b: ${{ steps.output.outputs.b }}
+      ${{ matrix.id }}: ${{ steps.outputs.output }}
 
   manifest:
     needs: build
@@ -40,5 +39,5 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Manifest
         run: |
-          echo ${{ needs.build.strategy.matrix.id }}
+          echo ${{ fromJson(needs.build.outputs) }}
           docker manifest create ${{ github.repository_owner }}
