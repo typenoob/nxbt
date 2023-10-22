@@ -39,7 +39,7 @@ jobs:
           if-no-files-found: warn
 
   check-matrix:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: [matrix]
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
@@ -54,7 +54,7 @@ jobs:
     needs: [check-matrix]
     runs-on: ubuntu-latest
     env:
-      test: ${{ needs.check-matrix.outputs.matrix }}
+      matrix: ${{ needs.check-matrix.outputs.matrix }}
     steps:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -63,4 +63,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Manifest
         run: |
-          echo $test
+          gnu_containers=$($matrix | jq -r '[.[]|select(.libc=="gnu")|.id="typenoob/\(.id)"|.id]|join(" ")')
+          musl_containers=$($matrix | jq -r '[.[]|select(.libc=="musl")|.id="typenoob/\(.id)"|.id]|join(" ")')
+          docker manifest create typenoob/0.1-gnu $gnu_containers
+          docker manifest create typenoob/0.1-musl $musl_containers
