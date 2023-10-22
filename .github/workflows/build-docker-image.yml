@@ -64,7 +64,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Manifest
         run: |
-          gnu_containers=$(echo $matrix | jq -r '[.[]|select(.libc=="gnu")|.id="typenoob/\(.id)"|.id]|join(" ")')
-          musl_containers=$(echo $matrix | jq -r '[.[]|select(.libc=="musl")|.id="typenoob/\(.id)"|.id]|join(" ")')
+          echo "{gnu_containers}={echo $matrix | jq -r '[.[]|select(.libc=="gnu")|.id="typenoob/\(.id)"|.id]|join(" ")'}" >> $GITHUB_ENV
+          echo "{musl_containers}={echo $matrix | jq -r '[.[]|select(.libc=="musl")|.id="typenoob/\(.id)"|.id]|join(" ")'}" >> $GITHUB_ENV
           docker manifest create $name/0.1-gnu $gnu_containers
           docker manifest create $name/0.1-musl $musl_containers
