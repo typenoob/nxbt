@@ -4,8 +4,8 @@ from threading import RLock
 import time
 from socket import gethostname
 
-from .cert import generate_cert
-from ..nxbt import Nxbt, PRO_CONTROLLER
+from web.cert import generate_cert
+from nxbt import Nxbt, PRO_CONTROLLER
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import eventlet

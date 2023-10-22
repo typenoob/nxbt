@@ -4,10 +4,6 @@ from time import sleep
 import os
 import traceback
 
-from nxbt import Nxbt, PRO_CONTROLLER
-from bluez import find_devices_by_alias
-from tui import InputTUI
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('command', default=False, choices=[
@@ -316,9 +312,9 @@ def list_switch_addresses():
 
 
 def main():
-
+    print(1)
     if args.command == 'webapp':
-        from .web import start_web_app
+        from web.app import start_web_app
         start_web_app(ip=args.ip, port=args.port,
             usessl=args.usessl, cert_path=args.certpath)
     elif args.command == 'demo':
@@ -337,3 +333,4 @@ def main():
         list_switch_addresses()
     elif args.command == 'test':
         test()
+main()
