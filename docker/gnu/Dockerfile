@@ -8,7 +8,7 @@ RUN apt update \
     && python3 -m venv /venv 
 ENV PATH="/venv/bin:$PATH"
 RUN pip install pyinstaller \
-    && pyinstaller ./entrypoint.spec \
-    && cp ./dist/entrypoint /bin/nxbt \
+    && pyinstaller ./docker/entrypoint.spec \
+    && cp ./docker/dist/entrypoint /bin/nxbt \
     && chmod +x /bin/nxbt
 ENTRYPOINT ["nxbt"]
