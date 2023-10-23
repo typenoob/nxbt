@@ -84,7 +84,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ./docker
+          context: .
           platforms: ${{ matrix.platform }}
           push: true
           tags: typenoob/nxbt:0.1-${{ matrix.id }}
