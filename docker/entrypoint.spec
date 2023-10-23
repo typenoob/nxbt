@@ -6,7 +6,7 @@ block_cipher = None
 
 a = Analysis(
     ['entrypoint.py'],
-    pathex=[],
+    pathex=['/nxbt/docker'],
     binaries=[],
     datas=[],
     hiddenimports=[
