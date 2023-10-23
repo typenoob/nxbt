@@ -10,7 +10,8 @@ on:
   pull_request:
     branches: ["master"]
   workflow_dispatch:
-
+env:
+  VERSION: 0.2
 jobs:
   matrix:
     runs-on: ubuntu-latest
@@ -87,10 +88,10 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: typenoob/nxbt:0.1-${{ matrix.id }}
+          tags: typenoob/nxbt:${{ env.VERSION }}-${{ matrix.id }}
           file: docker/${{ matrix.libc }}/Dockerfile
       - name: Create the container
-        run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:0.1-${{ matrix.id }}
+        run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:${{ env.VERSION }}-${{ matrix.id }}
       - name: Copy the elf file
         run: |
           sudo docker cp extract:/nxbt/dist/entrypoint /nxbt-${{ matrix.id }}
@@ -141,5 +142,5 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Manifest
         run: |
-          docker buildx imagetools create -t $name/nxbt:0.1-gnu $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:0.1-\(.id)"|.id]|join(" ")')
-          docker buildx imagetools create -t $name/nxbt:0.1-musl $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:0.1-\(.id)"|.id]|join(" ")')
+          docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-gnu $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
+          docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-musl $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
