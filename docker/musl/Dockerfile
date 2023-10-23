@@ -8,6 +8,7 @@ RUN apk update \
     && python3 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 RUN pip install pyinstaller \
+    && pip install -r ./docker/requirements.txt \
     && pyinstaller ./docker/entrypoint.spec \
     && cp ./dist/entrypoint /bin/nxbt \
     && chmod +x /bin/nxbt
