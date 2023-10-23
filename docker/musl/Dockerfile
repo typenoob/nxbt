@@ -9,4 +9,4 @@ RUN apk update \
 ENV PATH="/venv/bin:$PATH"
 RUN pip install pyinstaller \
     && pyinstaller ./docker/entrypoint.spec \
-    && cp ./docker/dist/entrypoint /bin/nxbt \
+    && cp ./dist/entrypoint /bin/nxbt \
