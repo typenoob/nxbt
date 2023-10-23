@@ -3,6 +3,7 @@ from random import randint
 from time import sleep
 import os
 import traceback
+from sys import exit
 
 from .nxbt import Nxbt, PRO_CONTROLLER
 from .bluez import find_devices_by_alias

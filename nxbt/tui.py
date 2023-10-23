@@ -3,6 +3,7 @@ import time
 import psutil
 from collections import deque
 import multiprocessing
+from sys import exit
 
 from blessed import Terminal
 

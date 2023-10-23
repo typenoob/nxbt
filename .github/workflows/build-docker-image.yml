@@ -20,36 +20,36 @@ jobs:
           - libc: musl
             platform: linux/386
             id: musl-i386
-          - libc: musl
-            platform: linux/amd64
-            id: musl-amd64
-          - libc: musl
-            platform: linux/arm/v6
-            id: musl-armv6
-          - libc: musl
-            platform: linux/arm/v7
-            id: musl-armv7
-          - libc: musl
-            platform: linux/arm64/v8
-            id: musl-aarch64
-          - libc: musl
-            platform: linux/ppc64le
-            id: musl-ppc64le
-          - libc: musl
-            platform: linux/s390x
-            id: musl-s390x
-          - libc: gnu
-            platform: linux/386
-            id: gnu-i386
-          - libc: gnu
-            platform: linux/amd64
-            id: gnu-amd64
-          - libc: gnu
-            platform: linux/arm/v7
-            id: gnu-armv7
-          - libc: gnu
-            platform: linux/arm64/v8
-            id: gnu-aarch64
+          # - libc: musl
+          #   platform: linux/amd64
+          #   id: musl-amd64
+          # - libc: musl
+          #   platform: linux/arm/v6
+          #   id: musl-armv6
+          # - libc: musl
+          #   platform: linux/arm/v7
+          #   id: musl-armv7
+          # - libc: musl
+          #   platform: linux/arm64/v8
+          #   id: musl-aarch64
+          # - libc: musl
+          #   platform: linux/ppc64le
+          #   id: musl-ppc64le
+          # - libc: musl
+          #   platform: linux/s390x
+          #   id: musl-s390x
+          # - libc: gnu
+          #   platform: linux/386
+          #   id: gnu-i386
+          # - libc: gnu
+          #   platform: linux/amd64
+          #   id: gnu-amd64
+          # - libc: gnu
+          #   platform: linux/arm/v7
+          #   id: gnu-armv7
+          # - libc: gnu
+          #   platform: linux/arm64/v8
+          #   id: gnu-aarch64
     steps:
       - run: |
           matrix=$((
