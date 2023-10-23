@@ -142,5 +142,5 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Manifest
         run: |
-          docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-gnu $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
-          docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-musl $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
+          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-gnu $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
+          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-musl $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
