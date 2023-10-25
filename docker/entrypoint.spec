@@ -16,7 +16,6 @@ a = Analysis(
             'dns',
             'dns.dnssec',
             'dns.e164',
-            'dns.hash',
             'dns.namedict',
             'dns.tsigkeyring',
             'dns.update',
