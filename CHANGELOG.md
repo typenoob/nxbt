@@ -1,6 +1,6 @@
 ## Description
 
-For those who have difficult in installing this application, I added dockerfile and built executable binary files in order to easily install on multiple platforms.
+For those who have trouble in installing this application, I added dockerfile and built executable binary files in order to easily install on multiple platforms.
 
 You can download executable files in [release](https://github.com/typenoob/nxbt/releases).
 
@@ -10,6 +10,6 @@ Requirements:
 
 Use following command to build your own image.
 
-```docker build -t  [TAG_NAME] -f docker/[LIBC_KIND]/Dockerfile docker/gnu```
+``` docker build -t  [TAG_NAME] -f docker/[LIBC_KIND]/Dockerfile . ```
 
 You can use built image from [here](https://hub.docker.com/r/typenoob/nxbt) as well.
