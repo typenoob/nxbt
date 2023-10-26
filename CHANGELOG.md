@@ -2,7 +2,7 @@
 
 For those who have trouble in installing this application, I added dockerfile and built executable binary files in order to easily install on multiple platforms.
 
-You can download executable files in [release](https://github.com/typenoob/nxbt/releases).
+You can simply download executable files in [release](https://github.com/typenoob/nxbt/releases).
 
 Requirements:
 - Tag glib is for gnu based libc platform with glibc>=2.28
