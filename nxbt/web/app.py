@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from threading import RLock
 import time
 from socket import gethostname
@@ -15,10 +16,14 @@ app = Flask(__name__,
             static_url_path='',
             static_folder='static',)
 nxbt = Nxbt()
+if getattr(sys,'frozen',False):
+    path=os.path.dirname(sys.executable)
+elif __file__:
+    path=os.path.dirname(__file__)
 
 # Configuring/retrieving secret key
 secrets_path = os.path.join(
-    os.path.dirname(__file__), "secrets.txt"
+    os.path.dirname(path), "secrets.txt"
 )
 if not os.path.isfile(secrets_path):
     secret_key = os.urandom(24).hex()
@@ -111,10 +116,10 @@ def start_web_app(ip='0.0.0.0', port=8000, usessl=False, cert_path=None):
         if cert_path is None:
             # Store certs in the package directory
             cert_path = os.path.join(
-                os.path.dirname(__file__), "cert.pem"
+                os.path.dirname(path), "cert.pem"
             )
             key_path = os.path.join(
-                os.path.dirname(__file__), "key.pem"
+                os.path.dirname(path), "key.pem"
             )
         else:
             # If specified, store certs at the user's preferred location
