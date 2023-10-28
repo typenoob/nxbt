@@ -59,7 +59,6 @@ jobs:
           echo "$matrix" > matrix
           echo "::set-output name=matrix::$matrix"
         id: matrix
-        if: github.event_name == 'workflow_dispatch' && (github.event.inputs.build_target == matrix.target || github.event.inputs.build_target == '*' || github.event.inputs.build_target == '')
       - uses: actions/upload-artifact@v3
         with:
           name: ${{ hashFiles('matrix') || 'none' }}
