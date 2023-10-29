@@ -10,7 +10,8 @@ a = Analysis(
     binaries=[],
     datas=[
 	    ('./nxbt/web/static','static'),
-            ('./nxbt/web/templates','templates')],
+            ('./nxbt/web/templates','templates'),
+	    ('./nxbt/controller/sdp','sdp')],
     hiddenimports=[
             'engineio.async_drivers.eventlet',
             'eventlet.hubs.epolls',
