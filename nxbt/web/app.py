@@ -11,15 +11,15 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import eventlet
 
-
-app = Flask(__name__,
-            static_url_path='',
-            static_folder='static',)
 nxbt = Nxbt()
 if getattr(sys,'frozen',False):
     path=os.path.dirname(sys.executable)
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'static')
+    app = Flask(__name__, static_url_path='', template_folder=template_folder, static_folder=static_folder)
 elif __file__:
     path=os.path.dirname(__file__)
+    app = Flask(__name__, static_url_path='')
 
 # Configuring/retrieving secret key
 secrets_path = os.path.join(

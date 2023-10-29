@@ -8,12 +8,15 @@ a = Analysis(
     ['entrypoint.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[
+	    ('./nxbt/web/static','static'),
+            ('./nxbt/web/templates','templates')],
     hiddenimports=[
+            'engineio.async_drivers.eventlet',
             'eventlet.hubs.epolls',
             'eventlet.hubs.kqueue',
             'eventlet.hubs.selects',
-            'dns',
+	    'dns',
             'dns.dnssec',
             'dns.e164',
             'dns.namedict',
