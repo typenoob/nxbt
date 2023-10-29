@@ -1,10 +1,13 @@
 from enum import Enum
 import os
 import logging
-
+import sys
 import dbus
 
-
+if getattr(sys,'frozen',False):
+    path=os.path.dirname(sys.executable)
+elif __file__:
+    path=os.path.dirname(__file__)
 class ControllerTypes(Enum):
     """Controller type enumerations for initializing the controller server.
     """
@@ -49,7 +52,7 @@ class Controller():
 
         # Adding the SDP record
         sdp_record_path = os.path.join(
-            os.path.dirname(__file__), "sdp", "switch-controller.xml")
+            os.path.dirname(path), "sdp", "switch-controller.xml")
         sdp_record = None
         with open(sdp_record_path, "r") as f:
             sdp_record = f.read()
