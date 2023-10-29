@@ -1,13 +1,10 @@
-from enum import Enum
-import os
 import logging
+import os
 import sys
+from enum import Enum
+
 import dbus
 
-if getattr(sys,'frozen',False):
-    path=os.path.dirname(sys.executable)
-elif __file__:
-    path=os.path.dirname(__file__)
 class ControllerTypes(Enum):
     """Controller type enumerations for initializing the controller server.
     """
@@ -49,7 +46,10 @@ class Controller():
         self.bt.set_discoverable_timeout(180)
 
         self.bt.set_alias(self.alias)
-
+        if getattr(sys,'frozen',False):
+            path=os.path.dirname(sys.executable)
+        elif __file__:
+            path=os.path.dirname(__file__)
         # Adding the SDP record
         sdp_record_path = os.path.join(
             os.path.dirname(path), "sdp", "switch-controller.xml")
