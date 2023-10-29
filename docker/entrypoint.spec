@@ -18,6 +18,8 @@ a = Analysis(
             'eventlet.hubs.kqueue',
             'eventlet.hubs.selects',
 	    'dns',
+	    'dns.hash',
+            'dns.zone',
             'dns.dnssec',
             'dns.e164',
             'dns.namedict',
