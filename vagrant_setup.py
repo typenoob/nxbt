@@ -22,14 +22,15 @@ def get_usb_devices():
         manufacturer = find_line_items("Manufacturer", device)
         product = find_line_items("Product", device)
 
-        if (len(productid) < 1 or len(vendorid) < 1 or 
-                len(manufacturer) < 1 or len(product) < 1):
+        if len(productid) < 1 or len(vendorid) < 1:
             continue
 
         productid = productid[0]
         vendorid = vendorid[0]
-        manufacturer = manufacturer[0]
-        product = product[0]
+        if len(manufacturer) >= 1:
+            manufacturer = manufacturer[0]
+        if len(product) >= 1:
+            product = product[0]
 
         if len(productid) != 13 or len(vendorid) != 13:
             continue
