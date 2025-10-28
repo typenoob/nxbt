@@ -29,8 +29,12 @@ def get_usb_devices():
         vendorid = vendorid[0]
         if len(manufacturer) >= 1:
             manufacturer = manufacturer[0]
+        else:
+            manufacturer = "Unknown"
         if len(product) >= 1:
             product = product[0]
+        else:
+            product = "Unknown"
 
         if len(productid) != 13 or len(vendorid) != 13:
             continue
