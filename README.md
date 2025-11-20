@@ -14,7 +14,7 @@ My plan is to commence by maintaining a fork of the project. Upon reaching a suf
 
 ## Welcomes
 
-Welcome everybody to contribute your ideas and contributes by issue and pr
+Welcome everybody to share your ideas or contribute by issue and pr
 
 ## Thanks
 
