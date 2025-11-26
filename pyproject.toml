@@ -4,7 +4,8 @@ version = "0.1.4"
 description = "Control your Nintendo Switch through a website, terminal, or macro."
 readme = {file = "README.md", content-type = "text/markdown"}
 authors = [
-    {name = "Reece Walsh", email = "reece@brikwerk.com"}
+    {name = "Reece Walsh", email = "reece@brikwerk.com"},
+    {name = "Yutao Chen", email = "chenyutao0706@gmail.com"}
 ]
 license = {text = "MIT"}
 keywords = ["nintendo", "switch", "bluetooth", "macro"]
@@ -14,9 +15,9 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries :: Python Modules"
 ]
 requires-python = ">=3.10"
@@ -40,9 +41,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Brikwerk/nxbt"
-Repository = "https://github.com/Brikwerk/nxbt"
-Issues = "https://github.com/Brikwerk/nxbt/issues"
+Homepage = "https://github.com/typenoob/nxbt"
+Repository = "https://github.com/typenoob/nxbt"
+Issues = "https://github.com/typenoob/nxbt/issues"
 
 [project.scripts]
 nxbt = "nxbt.cli:main"
@@ -59,11 +60,6 @@ include = [
 [tool.hatch.build.targets.wheel]
 packages = ["nxbt"]
 
-# 测试配置 (如果需要的话)
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-filterwarnings = ["error"]
-
 [tool.flake8]
 max-line-length = 100
 exclude = [".git", ".eggs", "__pycache__", "tests/", "docs/", "build/", "dist/"]
@@ -72,3 +68,9 @@ exclude = [".git", ".eggs", "__pycache__", "tests/", "docs/", "build/", "dist/"]
 
 url = "https://pypi.tuna.tsinghua.edu.cn/simple"
 default = true
+
+[dependency-groups]
+dev = [
+    "nuitka>=2.8.4",
+    "ruff>=0.14.4",
+]
