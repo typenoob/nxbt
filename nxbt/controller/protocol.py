@@ -7,7 +7,6 @@ from .utils import replace_subarray
 
 
 class SwitchResponses(Enum):
-
     NO_DATA = -1
     MALFORMED = -2
     TOO_SHORT = -3
@@ -24,26 +23,22 @@ class SwitchResponses(Enum):
     SET_NFC_IR_CONFIG = 0x21
 
 
-class ControllerProtocol():
-
+class ControllerProtocol:
     CONTROLLER_INFO = {
-        ControllerTypes.JOYCON_L: {
-            "id": 0x01,
-            "connection_info": 0x0E
-        },
-        ControllerTypes.JOYCON_R: {
-            "id": 0x02,
-            "connection_info": 0x0E
-        },
-        ControllerTypes.PRO_CONTROLLER: {
-            "id": 0x03,
-            "connection_info": 0x00
-        }
+        ControllerTypes.JOYCON_L: {"id": 0x01, "connection_info": 0x0E},
+        ControllerTypes.JOYCON_R: {"id": 0x02, "connection_info": 0x0E},
+        ControllerTypes.PRO_CONTROLLER: {"id": 0x03, "connection_info": 0x00},
     }
     VIBRATOR_BYTES = [0xA0, 0xB0, 0xC0, 0x90]
 
-    def __init__(self, controller_type, bt_address, report_size=50,
-                 colour_body=None, colour_buttons=None):
+    def __init__(
+        self,
+        controller_type,
+        bt_address,
+        report_size=50,
+        colour_body=None,
+        colour_buttons=None,
+    ):
         """Initializes the protocol for the controller.
 
         :param controller_type: The type of controller (Joy-Con (L),
@@ -90,8 +85,9 @@ class ControllerProtocol():
 
         # High/Low Nibble
         self.battery_level = 0x90
-        self.connection_info = (
-            self.CONTROLLER_INFO[self.controller_type]["connection_info"])
+        self.connection_info = self.CONTROLLER_INFO[self.controller_type][
+            "connection_info"
+        ]
 
         self.button_status = [0x00] * 3
 
@@ -129,14 +125,12 @@ class ControllerProtocol():
             self.colour_buttons = colour_buttons
 
     def get_report(self):
-
         report = bytes(self.report)
         # Clear report
         self.set_empty_report()
         return report
 
     def process_commands(self, data):
-
         # Parsing the Switch's message
         message = SwitchReportParser(data)
 
@@ -200,14 +194,12 @@ class ControllerProtocol():
             self.set_full_input_report()
 
     def set_empty_report(self):
-
         empty_report = [0] * self.report_size
         empty_report[0] = 0xA1
 
         self.report = empty_report
 
     def set_subcommand_reply(self):
-
         # Input Report ID
         self.report[1] = 0x21
 
@@ -220,7 +212,6 @@ class ControllerProtocol():
         self.set_standard_input_report()
 
     def set_unknown_subcommand(self, subcommand_id):
-
         # Set NACK
         self.report[14]
 
@@ -228,7 +219,6 @@ class ControllerProtocol():
         self.report[15] = subcommand_id
 
     def set_timer(self):
-
         # If the timer hasn't been set before
         if not self.timestamp:
             self.timestamp = perf_counter()
@@ -249,14 +239,12 @@ class ControllerProtocol():
         self.timestamp = now
 
     def set_full_input_report(self):
-
         # Setting Report ID to full standard input report ID
         self.report[1] = 0x30
         self.set_standard_input_report()
         self.set_imu_data()
 
     def set_standard_input_report(self):
-
         self.set_timer()
 
         if self.device_info_queried:
@@ -277,25 +265,21 @@ class ControllerProtocol():
             self.report[13] = self.vibrator_report
 
     def set_button_inputs(self, upper, shared, lower):
-
         self.report[4] = upper
         self.report[5] = shared
         self.report[6] = lower
 
     def set_left_stick_inputs(self, left):
-
         self.report[7] = left[0]
         self.report[8] = left[1]
         self.report[9] = left[2]
 
     def set_right_stick_inputs(self, right):
-
         self.report[10] = right[0]
         self.report[11] = right[1]
         self.report[12] = right[2]
 
     def set_device_info(self):
-
         # ACK Reply
         self.report[14] = 0x82
 
@@ -329,7 +313,6 @@ class ControllerProtocol():
         self.report[27] = 0x01
 
     def set_shipment(self):
-
         # ACK Reply
         self.report[14] = 0x80
 
@@ -337,7 +320,6 @@ class ControllerProtocol():
         self.report[15] = 0x08
 
     def toggle_imu(self, message):
-
         if message.subcommand[1] == 0x01:
             self.imu_enabled = True
         else:
@@ -350,18 +332,50 @@ class ControllerProtocol():
         self.report[15] = 0x40
 
     def set_imu_data(self):
-
         if not self.imu_enabled:
             return
 
-        imu_data = [0x75, 0xFD, 0xFD, 0xFF, 0x09, 0x10, 0x21, 0x00, 0xD5, 0xFF,
-                    0xE0, 0xFF, 0x72, 0xFD, 0xF9, 0xFF, 0x0A, 0x10, 0x22, 0x00,
-                    0xD5, 0xFF, 0xE0, 0xFF, 0x76, 0xFD, 0xFC, 0xFF, 0x09, 0x10,
-                    0x23, 0x00, 0xD5, 0xFF, 0xE0, 0xFF]
+        imu_data = [
+            0x75,
+            0xFD,
+            0xFD,
+            0xFF,
+            0x09,
+            0x10,
+            0x21,
+            0x00,
+            0xD5,
+            0xFF,
+            0xE0,
+            0xFF,
+            0x72,
+            0xFD,
+            0xF9,
+            0xFF,
+            0x0A,
+            0x10,
+            0x22,
+            0x00,
+            0xD5,
+            0xFF,
+            0xE0,
+            0xFF,
+            0x76,
+            0xFD,
+            0xFC,
+            0xFF,
+            0x09,
+            0x10,
+            0x23,
+            0x00,
+            0xD5,
+            0xFF,
+            0xE0,
+            0xFF,
+        ]
         replace_subarray(self.report, 14, 49, replace_arr=imu_data)
 
     def spi_read(self, message):
-
         addr_top = message.subcommand[2]
         addr_bottom = message.subcommand[1]
         read_length = message.subcommand[5]
@@ -382,12 +396,26 @@ class ControllerProtocol():
         # Stick Parameters
         # Params are generally the same for all sticks
         # Notable difference is the deadzone (10% Joy-Con vs 15% Pro Con)
-        params = [0x0F, 0x30, 0x61,  # Unused
-                  0x96, 0x30, 0xF3,  # Dead Zone/Range Ratio
-                  0xD4, 0x14, 0x54,  # X/Y ?
-                  0x41, 0x15, 0x54,  # X/Y ?
-                  0xC7, 0x79, 0x9C,  # X/Y ?
-                  0x33, 0x36, 0x63]  # X/Y ?
+        params = [
+            0x0F,
+            0x30,
+            0x61,  # Unused
+            0x96,
+            0x30,
+            0xF3,  # Dead Zone/Range Ratio
+            0xD4,
+            0x14,
+            0x54,  # X/Y ?
+            0x41,
+            0x15,
+            0x54,  # X/Y ?
+            0xC7,
+            0x79,
+            0x9C,  # X/Y ?
+            0x33,
+            0x36,
+            0x63,
+        ]  # X/Y ?
         # Adjusting deadzone for Joy-Cons
         if not self.controller_type == ControllerTypes.PRO_CONTROLLER:
             params[3] = 0xAE
@@ -400,19 +428,14 @@ class ControllerProtocol():
         # Colours
         elif addr_top == 0x60 and addr_bottom == 0x50:
             # Body colour
-            replace_subarray(
-                self.report, 21, 3,
-                replace_arr=self.colour_body)
+            replace_subarray(self.report, 21, 3, replace_arr=self.colour_body)
             # Buttons colour
-            replace_subarray(
-                self.report, 24, 3,
-                replace_arr=self.colour_buttons)
+            replace_subarray(self.report, 24, 3, replace_arr=self.colour_buttons)
             # Left/right grip colours (Pro controller)
             replace_subarray(self.report, 27, 7, 0xFF)
 
         # Factory sensor/stick device parameters
         elif addr_top == 0x60 and addr_bottom == 0x80:
-
             # Six-Axis factory parameters
             if self.controller_type == ControllerTypes.PRO_CONTROLLER:
                 self.report[21] = 0x50
@@ -437,27 +460,20 @@ class ControllerProtocol():
 
         # Stick device parameters 2
         elif addr_top == 0x60 and addr_bottom == 0x98:
-
             # Setting same params since controllers always
             # have duplicates of stick params 1 for stick params 2
             replace_subarray(self.report, 21, 18, replace_arr=params)
 
         # User analog stick calibration
         elif addr_top == 0x80 and addr_bottom == 0x10:
-
             # Fill report with null user calibration info
             replace_subarray(self.report, 21, 24, 0xFF)
 
         # Factory analog stick calibration
         elif addr_top == 0x60 and addr_bottom == 0x3D:
-
             # Left/right stick calibration
-            l_calibration = [0xBA, 0xF5, 0x62,
-                             0x6F, 0xC8, 0x77,
-                             0xED, 0x95, 0x5B]
-            r_calibration = [0x16, 0xD8, 0x7D,
-                             0xF2, 0xB5, 0x5F,
-                             0x86, 0x65, 0x5E]
+            l_calibration = [0xBA, 0xF5, 0x62, 0x6F, 0xC8, 0x77, 0xED, 0x95, 0x5B]
+            r_calibration = [0x16, 0xD8, 0x7D, 0xF2, 0xB5, 0x5F, 0x86, 0x65, 0x5E]
 
             # Left stick calibration
             # If null, fill with 0xFF
@@ -477,30 +493,46 @@ class ControllerProtocol():
             self.report[39] = 0xFF
 
             # Body colour
-            replace_subarray(
-                self.report, 40, 3,
-                replace_arr=self.colour_body)
+            replace_subarray(self.report, 40, 3, replace_arr=self.colour_body)
             # Buttons colour
-            replace_subarray(
-                self.report, 43, 3,
-                replace_arr=self.colour_buttons)
+            replace_subarray(self.report, 43, 3, replace_arr=self.colour_buttons)
 
         # Six-Axis motion sensor factor calibration
         elif addr_top == 0x60 and addr_bottom == 0x20:
-
             # 1: Acceleration origin position
             # 2: Acceleration sensitivity coefficient
             # 3: Gyro origin when still
             # 4: Gyro sensitivity coefficient
-            sa_calibration = [0xD3, 0xFF, 0xD5, 0xFF, 0x55, 0x01,  # 1
-                              0x00, 0x40, 0x00, 0x40, 0x00, 0x40,  # 2
-                              0x19, 0x00, 0xDD, 0xFF, 0xDC, 0xFF,  # 3
-                              0x3B, 0x34, 0x3B, 0x34, 0x3B, 0x34]  # 4
+            sa_calibration = [
+                0xD3,
+                0xFF,
+                0xD5,
+                0xFF,
+                0x55,
+                0x01,  # 1
+                0x00,
+                0x40,
+                0x00,
+                0x40,
+                0x00,
+                0x40,  # 2
+                0x19,
+                0x00,
+                0xDD,
+                0xFF,
+                0xDC,
+                0xFF,  # 3
+                0x3B,
+                0x34,
+                0x3B,
+                0x34,
+                0x3B,
+                0x34,
+            ]  # 4
 
             replace_subarray(self.report, 21, 24, replace_arr=sa_calibration)
 
     def set_mode(self, message):
-
         # ACK byte
         self.report[14] = 0x80
 
@@ -515,7 +547,6 @@ class ControllerProtocol():
             self.mode = "simpleHID"
 
     def set_trigger_buttons(self):
-
         # ACK byte
         self.report[14] = 0x83
 
@@ -523,7 +554,6 @@ class ControllerProtocol():
         self.report[15] = 0x04
 
     def enable_vibration(self):
-
         # ACK Reply
         self.report[14] = 0x82
 
@@ -534,7 +564,6 @@ class ControllerProtocol():
         self.vibration_enabled = True
 
     def set_player_lights(self, message):
-
         # ACK byte
         self.report[14] = 0x80
 
@@ -553,7 +582,6 @@ class ControllerProtocol():
             self.player_number = 4
 
     def set_nfc_ir_state(self):
-
         # ACK byte
         self.report[14] = 0x80
 
@@ -561,7 +589,6 @@ class ControllerProtocol():
         self.report[15] = 0x22
 
     def set_nfc_ir_config(self):
-
         # ACK byte
         self.report[14] = 0xA0
 
@@ -574,8 +601,7 @@ class ControllerProtocol():
         self.report[49] = 0xC8
 
 
-class SwitchReportParser():
-
+class SwitchReportParser:
     SUBCOMMANDS = {
         0x02: SwitchResponses.REQUEST_DEVICE_INFO,
         0x08: SwitchResponses.SET_SHIPMENT,
@@ -590,7 +616,6 @@ class SwitchReportParser():
     }
 
     def __init__(self, data, data_length=50):
-
         # Non-data check
         if not data:
             self.response = SwitchResponses.NO_DATA

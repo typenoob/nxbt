@@ -5,30 +5,28 @@ from enum import Enum
 
 import dbus
 
+
 class ControllerTypes(Enum):
-    """Controller type enumerations for initializing the controller server.
-    """
+    """Controller type enumerations for initializing the controller server."""
 
     JOYCON_L = 1
     JOYCON_R = 2
     PRO_CONTROLLER = 3
 
 
-class Controller():
-
+class Controller:
     GAMEPAD_CLASS = "0x002508"
     SDP_UUID = "00001000-0000-1000-8000-00805f9b34fb"
     SDP_RECORD_PATH = "/nxbt/controller"
     ALIASES = {
         ControllerTypes.JOYCON_L: "Joy-Con (L)",
         ControllerTypes.JOYCON_R: "Joy-Con (R)",
-        ControllerTypes.PRO_CONTROLLER: "Pro Controller"
+        ControllerTypes.PRO_CONTROLLER: "Pro Controller",
     }
 
     def __init__(self, bluetooth, controller_type):
-
         self.bt = bluetooth
-        self.logger = logging.getLogger('nxbt')
+        self.logger = logging.getLogger("nxbt")
 
         if controller_type not in self.ALIASES.keys():
             raise ValueError("Unknown controller type specified")
@@ -46,13 +44,12 @@ class Controller():
         self.bt.set_discoverable_timeout(180)
 
         self.bt.set_alias(self.alias)
-        if getattr(sys,'frozen',False):
+        if getattr(sys, "frozen", False):
             path = sys._MEIPASS
         elif __file__:
             path = os.path.dirname(__file__)
         # Adding the SDP record
-        sdp_record_path = os.path.join(
-            path, "sdp", "switch-controller.xml")
+        sdp_record_path = os.path.join(path, "sdp", "switch-controller.xml")
         sdp_record = None
         with open(sdp_record_path, "r") as f:
             sdp_record = f.read()
@@ -62,7 +59,7 @@ class Controller():
             "Role": "server",
             "RequireAuthentication": False,
             "RequireAuthorization": False,
-            "AutoConnect": True
+            "AutoConnect": True,
         }
         # If the profile has already been registered,
         # catch the error and continue

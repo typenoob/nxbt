@@ -11,10 +11,11 @@ from .tui import InputTUI
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('command', default=False, choices=[
-                        'webapp', 'demo', 'macro', 'tui', 'remote_tui', 'addresses', 'test'
-                    ],
-                    help="""Specifies the nxbt command to run:
+parser.add_argument(
+    "command",
+    default=False,
+    choices=["webapp", "demo", "macro", "tui", "remote_tui", "addresses", "test"],
+    help="""Specifies the nxbt command to run:
                     webapp - Runs web server and allows for controller/macro
                     input from a web browser.
                     demo - Runs a demo macro (please ensure that your Switch
@@ -26,33 +27,84 @@ parser.add_argument('command', default=False, choices=[
                     addresses - Lists the Bluetooth MAC addresses for
                     all previously connected Nintendo Switches.
                     test - Runs through a series of tests to ensure NXBT is working and
-                    compatible with your system.""")
-parser.add_argument('-c', '--commands', required=False, default=False,
-                    help="""Used in conjunction with the macro command. Specifies a
-                    macro string or a file location to load a macro string from.""")
-parser.add_argument('-r', '--reconnect', required=False, default=False, action='store_true',
-                    help="""Used in conjunction with the macro or tui command. If specified,
+                    compatible with your system.""",
+)
+parser.add_argument(
+    "-c",
+    "--commands",
+    required=False,
+    default=False,
+    help="""Used in conjunction with the macro command. Specifies a
+                    macro string or a file location to load a macro string from.""",
+)
+parser.add_argument(
+    "-r",
+    "--reconnect",
+    required=False,
+    default=False,
+    action="store_true",
+    help="""Used in conjunction with the macro or tui command. If specified,
                     nxbt will attmept to reconnect to any previously connected
-                    Nintendo Switch.""")
-parser.add_argument('-a', '--address', required=False, default=False,
-                    help="""Used in conjunction with the macro or tui command. If specified,
+                    Nintendo Switch.""",
+)
+parser.add_argument(
+    "-a",
+    "--address",
+    required=False,
+    default=False,
+    help="""Used in conjunction with the macro or tui command. If specified,
                     nxbt will attmept to reconnect to a specific Bluetooth MAC address
-                    of a Nintendo Switch.""")
-parser.add_argument('-d', '--debug', required=False, default=False, action='store_true',
-                    help="""Enables debug mode in nxbt.""")
-parser.add_argument('-l', '--logfile', required=False, default=False, action='store_true',
-                    help="""Enables logging to a file in the current working directory
-                    instead of stderr.""")
-parser.add_argument('-i', '--ip', required=False, default="0.0.0.0", type=str,
-                    help="""Specifies the IP to run the webapp at. Defaults to 0.0.0.0""")
-parser.add_argument('-p', '--port', required=False, default=8000, type=int,
-                    help="""Specifies the port to run the webapp at. Defaults to 8000""")
-parser.add_argument('--usessl', required=False, default=False, action='store_true',
-                    help="""Enables or disables SSL use in the webapp""")
-parser.add_argument('--certpath', required=False, default=None, type=str,
-                    help="""Specifies the folder location for SSL certificates used
+                    of a Nintendo Switch.""",
+)
+parser.add_argument(
+    "-d",
+    "--debug",
+    required=False,
+    default=False,
+    action="store_true",
+    help="""Enables debug mode in nxbt.""",
+)
+parser.add_argument(
+    "-l",
+    "--logfile",
+    required=False,
+    default=False,
+    action="store_true",
+    help="""Enables logging to a file in the current working directory
+                    instead of stderr.""",
+)
+parser.add_argument(
+    "-i",
+    "--ip",
+    required=False,
+    default="0.0.0.0",
+    type=str,
+    help="""Specifies the IP to run the webapp at. Defaults to 0.0.0.0""",
+)
+parser.add_argument(
+    "-p",
+    "--port",
+    required=False,
+    default=8000,
+    type=int,
+    help="""Specifies the port to run the webapp at. Defaults to 8000""",
+)
+parser.add_argument(
+    "--usessl",
+    required=False,
+    default=False,
+    action="store_true",
+    help="""Enables or disables SSL use in the webapp""",
+)
+parser.add_argument(
+    "--certpath",
+    required=False,
+    default=None,
+    type=str,
+    help="""Specifies the folder location for SSL certificates used
                     in the webapp. Certificates in this folder should be in the form of
-                    a 'cert.pem' and 'key.pem' pair.""")                
+                    a 'cert.pem' and 'key.pem' pair.""",
+)
 args = parser.parse_args()
 
 
@@ -109,7 +161,6 @@ A 0.1s
 
 
 def random_colour():
-
     return [
         randint(0, 255),
         randint(0, 255),
@@ -131,7 +182,6 @@ def check_bluetooth_address(address):
 
 
 def get_reconnect_target():
-
     if args.reconnect:
         reconnect_target = find_devices_by_alias("Nintendo Switch")
     elif args.address:
@@ -160,7 +210,8 @@ def demo():
             PRO_CONTROLLER,
             adapters[i],
             colour_body=random_colour(),
-            colour_buttons=random_colour())
+            colour_buttons=random_colour(),
+        )
         controller_idxs.append(index)
 
     # Run a macro on the last controller
@@ -168,9 +219,9 @@ def demo():
     macro_id = nx.macro(controller_idxs[-1], MACRO, block=False)
     while macro_id not in nx.state[controller_idxs[-1]]["finished_macros"]:
         state = nx.state[controller_idxs[-1]]
-        if state['state'] == 'crashed':
+        if state["state"] == "crashed":
             print("An error occurred while running the demo:")
-            print(state['errors'])
+            print(state["errors"])
             exit(1)
         sleep(1.0)
 
@@ -207,17 +258,20 @@ def test():
     print("Adapters:", adapters, "\n")
 
     # Creating a controller
-    print("[3] Please turn on your Switch and navigate to the 'Change Grip/Order menu.'")
+    print(
+        "[3] Please turn on your Switch and navigate to the 'Change Grip/Order menu.'"
+    )
     input("Press Enter to continue...")
 
     print("Creating a controller with the first Bluetooth adapter...")
     cindex = None
     try:
         cindex = nx.create_controller(
-                 PRO_CONTROLLER,
-                 adapters[0],
-                 colour_body=random_colour(),
-                 colour_buttons=random_colour())
+            PRO_CONTROLLER,
+            adapters[0],
+            colour_body=random_colour(),
+            colour_buttons=random_colour(),
+        )
     except Exception as e:
         print("Failed to create a controller:")
         print(traceback.format_exc())
@@ -229,13 +283,13 @@ def test():
     timeout = 120
     print(f"Connection timeout is {timeout} seconds for this test script.")
     elapsed = 0
-    while nx.state[cindex]['state'] != 'connected':
+    while nx.state[cindex]["state"] != "connected":
         if elapsed >= timeout:
             print("Timeout reached, exiting...")
             exit(1)
-        elif nx.state[cindex]['state'] == 'crashed':
+        elif nx.state[cindex]["state"] == "crashed":
             print("An error occurred while connecting:")
-            print(nx.state[cindex]['errors'])
+            print(nx.state[cindex]["errors"])
             exit(1)
         elapsed += 1
         sleep(1)
@@ -245,7 +299,7 @@ def test():
     print("[5] Attempting to exit the 'Change Grip/Order Menu'...")
     nx.macro(cindex, "B 0.1s\n0.1s")
     sleep(5)
-    if nx.state[cindex]['state'] != 'connected':
+    if nx.state[cindex]["state"] != "connected":
         print("Controller disconnected after leaving the menu.")
         print("Exiting...")
         exit(1)
@@ -281,14 +335,15 @@ def macro():
         PRO_CONTROLLER,
         colour_body=random_colour(),
         colour_buttons=random_colour(),
-        reconnect_address=reconnect_target)
+        reconnect_address=reconnect_target,
+    )
     print("Waiting for connection...")
     nx.wait_for_connection(index)
     print("Connected!")
 
     print("Running macro...")
     macro_id = nx.macro(index, macro, block=False)
-    while (True):
+    while True:
         if nx.state[index]["state"] == "crashed":
             print("Controller crashed while running macro")
             print(nx.state[index]["errors"])
@@ -296,11 +351,10 @@ def macro():
         if macro_id in nx.state[index]["finished_macros"]:
             print("Finished running macro. Exiting...")
             break
-        sleep(1/30)
+        sleep(1 / 30)
 
 
 def list_switch_addresses():
-
     addresses = find_devices_by_alias("Nintendo Switch")
 
     if not addresses or len(addresses) < 1:
@@ -312,29 +366,30 @@ def list_switch_addresses():
     print("---------------------------")
     for i in range(0, len(addresses)):
         address = addresses[i]
-        print(f"| {i+1}   | {address} |")
+        print(f"| {i + 1}   | {address} |")
     print("---------------------------")
 
 
 def main():
-
-    if args.command == 'webapp':
+    if args.command == "webapp":
         from .web import start_web_app
-        start_web_app(ip=args.ip, port=args.port,
-            usessl=args.usessl, cert_path=args.certpath)
-    elif args.command == 'demo':
+
+        start_web_app(
+            ip=args.ip, port=args.port, usessl=args.usessl, cert_path=args.certpath
+        )
+    elif args.command == "demo":
         demo()
-    elif args.command == 'macro':
+    elif args.command == "macro":
         macro()
-    elif args.command == 'tui':
+    elif args.command == "tui":
         reconnect_target = get_reconnect_target()
         tui = InputTUI(reconnect_target=reconnect_target)
         tui.start()
-    elif args.command == 'remote_tui':
+    elif args.command == "remote_tui":
         reconnect_target = get_reconnect_target()
         tui = InputTUI(reconnect_target=reconnect_target, force_remote=True)
         tui.start()
-    elif args.command == 'addresses':
+    elif args.command == "addresses":
         list_switch_addresses()
-    elif args.command == 'test':
+    elif args.command == "test":
         test()

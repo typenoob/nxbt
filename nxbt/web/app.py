@@ -12,19 +12,22 @@ from flask_socketio import SocketIO, emit
 import eventlet
 
 nxbt = Nxbt()
-if getattr(sys,'frozen',False):
-    path=os.path.dirname(sys.executable)
-    template_folder = os.path.join(sys._MEIPASS, 'templates')
-    static_folder = os.path.join(sys._MEIPASS, 'static')
-    app = Flask(__name__, static_url_path='', template_folder=template_folder, static_folder=static_folder)
+if getattr(sys, "frozen", False):
+    path = os.path.dirname(sys.executable)
+    template_folder = os.path.join(sys._MEIPASS, "templates")
+    static_folder = os.path.join(sys._MEIPASS, "static")
+    app = Flask(
+        __name__,
+        static_url_path="",
+        template_folder=template_folder,
+        static_folder=static_folder,
+    )
 elif __file__:
-    path=os.path.dirname(__file__)
-    app = Flask(__name__, static_url_path='')
+    path = os.path.dirname(__file__)
+    app = Flask(__name__, static_url_path="")
 
 # Configuring/retrieving secret key
-secrets_path = os.path.join(
-    os.path.dirname(path), "secrets.txt"
-)
+secrets_path = os.path.join(os.path.dirname(path), "secrets.txt")
 if not os.path.isfile(secrets_path):
     secret_key = os.urandom(24).hex()
     with open(secrets_path, "w") as f:
@@ -33,7 +36,7 @@ else:
     secret_key = None
     with open(secrets_path, "r") as f:
         secret_key = f.read()
-app.config['SECRET_KEY'] = secret_key
+app.config["SECRET_KEY"] = secret_key
 
 # Starting socket server with Flask app
 sio = SocketIO(app, cookie=False)
@@ -42,27 +45,27 @@ user_info_lock = RLock()
 USER_INFO = {}
 
 
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
 
-@sio.on('connect')
+@sio.on("connect")
 def on_connect():
     with user_info_lock:
         USER_INFO[request.sid] = {}
 
 
-@sio.on('state')
+@sio.on("state")
 def on_state():
     state_proxy = nxbt.state.copy()
     state = {}
     for controller in state_proxy.keys():
         state[controller] = state_proxy[controller].copy()
-    emit('state', state)
+    emit("state", state)
 
 
-@sio.on('disconnect')
+@sio.on("disconnect")
 def on_disconnect():
     print("Disconnected")
     with user_info_lock:
@@ -73,28 +76,30 @@ def on_disconnect():
             pass
 
 
-@sio.on('shutdown')
+@sio.on("shutdown")
 def on_shutdown(index):
     nxbt.remove_controller(index)
 
 
-@sio.on('web_create_pro_controller')
+@sio.on("web_create_pro_controller")
 def on_create_controller():
     print("Create Controller")
 
     try:
         reconnect_addresses = nxbt.get_switch_addresses()
-        index = nxbt.create_controller(PRO_CONTROLLER, reconnect_address=reconnect_addresses)
+        index = nxbt.create_controller(
+            PRO_CONTROLLER, reconnect_address=reconnect_addresses
+        )
 
         with user_info_lock:
             USER_INFO[request.sid]["controller_index"] = index
 
-        emit('create_pro_controller', index)
+        emit("create_pro_controller", index)
     except Exception as e:
-        emit('error', str(e))
+        emit("error", str(e))
 
 
-@sio.on('input')
+@sio.on("input")
 def handle_input(message):
     # print("Webapp Input", time.perf_counter())
     message = json.loads(message)
@@ -103,7 +108,7 @@ def handle_input(message):
     nxbt.set_controller_input(index, input_packet)
 
 
-@sio.on('macro')
+@sio.on("macro")
 def handle_macro(message):
     message = json.loads(message)
     index = message[0]
@@ -111,24 +116,16 @@ def handle_macro(message):
     nxbt.macro(index, macro)
 
 
-def start_web_app(ip='0.0.0.0', port=8000, usessl=False, cert_path=None):
+def start_web_app(ip="0.0.0.0", port=8000, usessl=False, cert_path=None):
     if usessl:
         if cert_path is None:
             # Store certs in the package directory
-            cert_path = os.path.join(
-                os.path.dirname(path), "cert.pem"
-            )
-            key_path = os.path.join(
-                os.path.dirname(path), "key.pem"
-            )
+            cert_path = os.path.join(os.path.dirname(path), "cert.pem")
+            key_path = os.path.join(os.path.dirname(path), "key.pem")
         else:
             # If specified, store certs at the user's preferred location
-            cert_path = os.path.join(
-                cert_path, "cert.pem"
-            )
-            key_path = os.path.join(
-                cert_path, "key.pem"
-            )
+            cert_path = os.path.join(cert_path, "cert.pem")
+            key_path = os.path.join(cert_path, "key.pem")
         if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
             print(
                 "\n"
@@ -156,8 +153,12 @@ def start_web_app(ip='0.0.0.0', port=8000, usessl=False, cert_path=None):
             with open(key_path, "wb") as f:
                 f.write(key)
 
-        eventlet.wsgi.server(eventlet.wrap_ssl(eventlet.listen((ip, port)),
-            certfile=cert_path, keyfile=key_path), app)
+        eventlet.wsgi.server(
+            eventlet.wrap_ssl(
+                eventlet.listen((ip, port)), certfile=cert_path, keyfile=key_path
+            ),
+            app,
+        )
     else:
         eventlet.wsgi.server(eventlet.listen((ip, port)), app)
 

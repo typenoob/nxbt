@@ -34,7 +34,7 @@ DIRECT_INPUT_PACKET = {
         "LS_UP": False,
         "LS_LEFT": False,
         "LS_RIGHT": False,
-        "LS_DOWN": False
+        "LS_DOWN": False,
     },
     "R_STICK": {
         "PRESSED": False,
@@ -44,7 +44,7 @@ DIRECT_INPUT_PACKET = {
         "RS_UP": False,
         "RS_LEFT": False,
         "RS_RIGHT": False,
-        "RS_DOWN": False
+        "RS_DOWN": False,
     },
     # Dpad
     "DPAD_UP": False,
@@ -70,41 +70,39 @@ DIRECT_INPUT_PACKET = {
     "Y": False,
     "X": False,
     "B": False,
-    "A": False
+    "A": False,
 }
 
 
-class Buttons():
-    """The button object containing the button string constants.
-    """
+class Buttons:
+    """The button object containing the button string constants."""
 
-    Y = 'Y'
-    X = 'X'
-    B = 'B'
-    A = 'A'
-    JCL_SR = 'JCL_SR'
-    JCL_SL = 'JCL_SL'
-    R = 'R'
-    ZR = 'ZR'
-    MINUS = 'MINUS'
-    PLUS = 'PLUS'
-    R_STICK_PRESS = 'R_STICK_PRESS'
-    L_STICK_PRESS = 'L_STICK_PRESS'
-    HOME = 'HOME'
-    CAPTURE = 'CAPTURE'
-    DPAD_DOWN = 'DPAD_DOWN'
-    DPAD_UP = 'DPAD_UP'
-    DPAD_RIGHT = 'DPAD_RIGHT'
-    DPAD_LEFT = 'DPAD_LEFT'
-    JCR_SR = 'JCR_SR'
-    JCR_SL = 'JCR_SL'
-    L = 'L'
-    ZL = 'ZL'
+    Y = "Y"
+    X = "X"
+    B = "B"
+    A = "A"
+    JCL_SR = "JCL_SR"
+    JCL_SL = "JCL_SL"
+    R = "R"
+    ZR = "ZR"
+    MINUS = "MINUS"
+    PLUS = "PLUS"
+    R_STICK_PRESS = "R_STICK_PRESS"
+    L_STICK_PRESS = "L_STICK_PRESS"
+    HOME = "HOME"
+    CAPTURE = "CAPTURE"
+    DPAD_DOWN = "DPAD_DOWN"
+    DPAD_UP = "DPAD_UP"
+    DPAD_RIGHT = "DPAD_RIGHT"
+    DPAD_LEFT = "DPAD_LEFT"
+    JCR_SR = "JCR_SR"
+    JCR_SL = "JCR_SL"
+    L = "L"
+    ZL = "ZL"
 
 
-class Sticks():
-    """The sticks object containing the joystick string constants.
-    """
+class Sticks:
+    """The sticks object containing the joystick string constants."""
 
     RIGHT_STICK = "R_STICK"
     LEFT_STICK = "L_STICK"
@@ -124,7 +122,7 @@ class NxbtCommands(Enum):
     QUIT = 6
 
 
-class Nxbt():
+class Nxbt:
     """The nxbt object implements the core multiprocessing logic
     and message passing API that acts as the central of the application.
     Upon creation, a multiprocessing Process is spun off to act at the
@@ -153,7 +151,8 @@ class Nxbt():
 
         self.debug = debug
         self.logger = create_logger(
-            debug=self.debug, log_to_file=log_to_file, disable_logging=disable_logging)
+            debug=self.debug, log_to_file=log_to_file, disable_logging=disable_logging
+        )
 
         # Main queue for nbxt tasks
         self.task_queue = Queue()
@@ -186,7 +185,8 @@ class Nxbt():
         # Starting the nxbt worker process
         self.controllers = Process(
             target=self._command_manager,
-            args=((self.task_queue), (self.manager_state), (self._bluetooth_lock)))
+            args=((self.task_queue), (self.manager_state), (self._bluetooth_lock)),
+        )
         # Disabling daemonization since we need to spawn
         # other controller processes, however, this means
         # we need to cleanup on exit.
@@ -245,19 +245,21 @@ class Nxbt():
                             msg["arguments"]["adapter_path"],
                             msg["arguments"]["colour_body"],
                             msg["arguments"]["colour_buttons"],
-                            msg["arguments"]["reconnect_address"])
+                            msg["arguments"]["reconnect_address"],
+                        )
                     elif msg["command"] == NxbtCommands.INPUT_MACRO:
                         cm.input_macro(
                             msg["arguments"]["controller_index"],
                             msg["arguments"]["macro"],
-                            msg["arguments"]["macro_id"])
+                            msg["arguments"]["macro_id"],
+                        )
                     elif msg["command"] == NxbtCommands.STOP_MACRO:
                         cm.stop_macro(
                             msg["arguments"]["controller_index"],
-                            msg["arguments"]["macro_id"])
+                            msg["arguments"]["macro_id"],
+                        )
                     elif msg["command"] == NxbtCommands.CLEAR_MACROS:
-                        cm.clear_macros(
-                            msg["arguments"]["controller_index"])
+                        cm.clear_macros(msg["arguments"]["controller_index"])
                     elif msg["command"] == NxbtCommands.REMOVE_CONTROLLER:
                         index = msg["arguments"]["controller_index"]
                         cm.clear_macros(index)
@@ -298,23 +300,24 @@ class Nxbt():
         # Get a unique ID to identify the macro
         # so we can check when the controller is done inputting it
         macro_id = os.urandom(24).hex()
-        self.task_queue.put({
-            "command": NxbtCommands.INPUT_MACRO,
-            "arguments": {
-                "controller_index": controller_index,
-                "macro": macro,
-                "macro_id": macro_id,
+        self.task_queue.put(
+            {
+                "command": NxbtCommands.INPUT_MACRO,
+                "arguments": {
+                    "controller_index": controller_index,
+                    "macro": macro,
+                    "macro_id": macro_id,
+                },
             }
-        })
+        )
 
         if block:
             while True:
-                finished = (self.manager_state
-                            [controller_index]["finished_macros"])
+                finished = self.manager_state[controller_index]["finished_macros"]
                 if macro_id in finished:
                     break
 
-                time.sleep(1/120)  # Wait one Pro Controller cycle
+                time.sleep(1 / 120)  # Wait one Pro Controller cycle
 
         return macro_id
 
@@ -350,8 +353,9 @@ class Nxbt():
 
         return macro_id
 
-    def tilt_stick(self, controller_index, stick, x, y,
-                   tilted=0.1, released=0.1, block=True):
+    def tilt_stick(
+        self, controller_index, stick, x, y, tilted=0.1, released=0.1, block=True
+    ):
         """Used to tilt a given stick on the controller for a
         specified tilted and released duration. This is done by
         inputting a macro configured with the specified stick tilts
@@ -384,16 +388,16 @@ class Nxbt():
             raise ValueError("Specified controller does not exist")
 
         if x >= 0:
-            x_parsed = f'+{x:03}'
+            x_parsed = f"+{x:03}"
         else:
-            x_parsed = f'{x:04}'
+            x_parsed = f"{x:04}"
 
         if y >= 0:
-            y_parsed = f'+{y:03}'
+            y_parsed = f"+{y:03}"
         else:
-            y_parsed = f'{y:04}'
+            y_parsed = f"{y:04}"
 
-        macro = f'{stick}@{x_parsed}{y_parsed} {tilted}s\n{released}s'
+        macro = f"{stick}@{x_parsed}{y_parsed} {tilted}s\n{released}s"
 
         macro_id = self.macro(controller_index, macro, block=block)
 
@@ -418,22 +422,23 @@ class Nxbt():
         if controller_index not in self.manager_state.keys():
             raise ValueError("Specified controller does not exist")
 
-        self.task_queue.put({
-            "command": NxbtCommands.STOP_MACRO,
-            "arguments": {
-                "controller_index": controller_index,
-                "macro_id": macro_id,
+        self.task_queue.put(
+            {
+                "command": NxbtCommands.STOP_MACRO,
+                "arguments": {
+                    "controller_index": controller_index,
+                    "macro_id": macro_id,
+                },
             }
-        })
+        )
 
         if block:
             while True:
-                finished = (self.manager_state
-                            [controller_index]["finished_macros"])
+                finished = self.manager_state[controller_index]["finished_macros"]
                 if macro_id in finished:
                     break
 
-                time.sleep(1/120)
+                time.sleep(1 / 120)
 
     def clear_macros(self, controller_index):
         """Clears all running and queued macros on a specified
@@ -450,12 +455,14 @@ class Nxbt():
         if controller_index not in self.manager_state.keys():
             raise ValueError("Specified controller does not exist")
 
-        self.task_queue.put({
-            "command": NxbtCommands.CLEAR_MACROS,
-            "arguments": {
-                "controller_index": controller_index,
+        self.task_queue.put(
+            {
+                "command": NxbtCommands.CLEAR_MACROS,
+                "arguments": {
+                    "controller_index": controller_index,
+                },
             }
-        })
+        )
 
     def clear_all_macros(self):
         """Clears all running and queued macros on all
@@ -498,9 +505,14 @@ class Nxbt():
         # NOTE: Using the copy.deepcopy method of copying dicts IS NOT thread safe.
         return json.loads(json.dumps(DIRECT_INPUT_PACKET))
 
-    def create_controller(self, controller_type, adapter_path=None,
-                          colour_body=None, colour_buttons=None,
-                          reconnect_address=None):
+    def create_controller(
+        self,
+        controller_type,
+        adapter_path=None,
+        colour_body=None,
+        colour_buttons=None,
+        reconnect_address=None,
+    ):
         """Used to create a Nintendo Switch controller of a
         given type and colour on an (optionally) specified
         bluetooth adapter.
@@ -544,7 +556,8 @@ class Nxbt():
         else:
             # Get all adapters we can use
             usable_adapters = list(
-                set(self.get_available_adapters()) - set(self._adapters_in_use))
+                set(self.get_available_adapters()) - set(self._adapters_in_use)
+            )
             if len(usable_adapters) > 0:
                 # Use the first available adapter
                 adapter_path = usable_adapters[0]
@@ -554,17 +567,19 @@ class Nxbt():
         controller_index = None
         try:
             self._controller_lock.acquire()
-            self.task_queue.put({
-                "command": NxbtCommands.CREATE_CONTROLLER,
-                "arguments": {
-                    "controller_index": self._controller_counter,
-                    "controller_type": controller_type,
-                    "adapter_path": adapter_path,
-                    "colour_body": colour_body,
-                    "colour_buttons": colour_buttons,
-                    "reconnect_address": reconnect_address,
+            self.task_queue.put(
+                {
+                    "command": NxbtCommands.CREATE_CONTROLLER,
+                    "arguments": {
+                        "controller_index": self._controller_counter,
+                        "controller_type": controller_type,
+                        "adapter_path": adapter_path,
+                        "colour_body": colour_body,
+                        "colour_buttons": colour_buttons,
+                        "reconnect_address": reconnect_address,
+                    },
                 }
-            })
+            )
             controller_index = self._controller_counter
             self._controller_counter += 1
             self._adapters_in_use[adapter_path] = controller_index
@@ -577,12 +592,14 @@ class Nxbt():
                 while True:
                     if controller_index in self.manager_state.keys():
                         state = self.manager_state[controller_index]
-                        if (state["state"] == "connecting" or
-                                state["state"] == "reconnecting" or
-                                state["state"] == "crashed"):
+                        if (
+                            state["state"] == "connecting"
+                            or state["state"] == "reconnecting"
+                            or state["state"] == "crashed"
+                        ):
                             break
 
-                    time.sleep(1/30)
+                    time.sleep(1 / 30)
         finally:
             self._controller_lock.release()
 
@@ -600,7 +617,9 @@ class Nxbt():
             if controller_index in self._controller_adapter_lookup.keys():
                 # Attempt to free any adapters claimed by a crashed controller
                 try:
-                    adapter_path = self._controller_adapter_lookup.pop(controller_index, None)
+                    adapter_path = self._controller_adapter_lookup.pop(
+                        controller_index, None
+                    )
                     self._adapters_in_use.pop(adapter_path, None)
                 except Exception:
                     pass
@@ -613,12 +632,14 @@ class Nxbt():
         finally:
             self._controller_lock.release()
 
-        self.task_queue.put({
-            "command": NxbtCommands.REMOVE_CONTROLLER,
-            "arguments": {
-                "controller_index": controller_index,
+        self.task_queue.put(
+            {
+                "command": NxbtCommands.REMOVE_CONTROLLER,
+                "arguments": {
+                    "controller_index": controller_index,
+                },
             }
-        })
+        )
 
     def wait_for_connection(self, controller_index):
         """Blocks until a given controller is connected
@@ -630,8 +651,10 @@ class Nxbt():
 
         while not self.state[controller_index]["state"] == "connected":
             if self.state[controller_index]["state"] == "crashed":
-                raise OSError("The watched controller has crashe with error",
-                              self.state[controller_index]["errors"])
+                raise OSError(
+                    "The watched controller has crashe with error",
+                    self.state[controller_index]["errors"],
+                )
             pass
 
     def get_available_adapters(self):
@@ -656,7 +679,7 @@ class Nxbt():
         :rtype: list
         """
 
-        return (find_devices_by_alias("Nintendo Switch"))
+        return find_devices_by_alias("Nintendo Switch")
 
     @property
     def state(self):
@@ -690,7 +713,7 @@ class Nxbt():
         return self.manager_state
 
 
-class _ControllerManager():
+class _ControllerManager:
     """Used as the manager for all controllers. Each controller is
     a daemon multiprocessing Process that the ControllerManager
     object creates and manages.
@@ -701,16 +724,21 @@ class _ControllerManager():
     """
 
     def __init__(self, state, lock):
-
         self.state = state
         self.lock = lock
         self.controller_resources = Manager()
         self._controller_queues = {}
         self._children = {}
 
-    def create_controller(self, index, controller_type, adapter_path,
-                          colour_body=None, colour_buttons=None,
-                          reconnect_address=None):
+    def create_controller(
+        self,
+        index,
+        controller_type,
+        adapter_path,
+        colour_body=None,
+        colour_buttons=None,
+        reconnect_address=None,
+    ):
         """Instantiates a given controller as a multiprocessing
         Process with a shared state dict and a task queue.
 
@@ -751,46 +779,45 @@ class _ControllerManager():
 
         self.state[index] = controller_state
 
-        server = ControllerServer(controller_type,
-                                  adapter_path=adapter_path,
-                                  lock=self.lock,
-                                  state=controller_state,
-                                  task_queue=controller_queue,
-                                  colour_body=colour_body,
-                                  colour_buttons=colour_buttons)
+        server = ControllerServer(
+            controller_type,
+            adapter_path=adapter_path,
+            lock=self.lock,
+            state=controller_state,
+            task_queue=controller_queue,
+            colour_body=colour_body,
+            colour_buttons=colour_buttons,
+        )
         controller = Process(target=server.run, args=(reconnect_address,))
         controller.daemon = True
         self._children[index] = controller
         controller.start()
 
     def input_macro(self, index, macro, macro_id):
-
-        self._controller_queues[index].put({
-            "type": "macro",
-            "macro": macro,
-            "macro_id": macro_id
-        })
+        self._controller_queues[index].put(
+            {"type": "macro", "macro": macro, "macro_id": macro_id}
+        )
 
     def stop_macro(self, index, macro_id):
-
-        self._controller_queues[index].put({
-            "type": "stop",
-            "macro_id": macro_id,
-        })
+        self._controller_queues[index].put(
+            {
+                "type": "stop",
+                "macro_id": macro_id,
+            }
+        )
 
     def clear_macros(self, index):
-
-        self._controller_queues[index].put({
-            "type": "clear",
-        })
+        self._controller_queues[index].put(
+            {
+                "type": "clear",
+            }
+        )
 
     def remove_controller(self, index):
-        
         self._children[index].terminate()
         self.state.pop(index, None)
 
     def shutdown(self):
-
         # Loop over children and kill all
         for index in self._children.keys():
             child = self._children[index]

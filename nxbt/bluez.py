@@ -38,8 +38,8 @@ def find_object_path(bus, service_name, interface_name, object_name=None):
     """
 
     manager = dbus.Interface(
-        bus.get_object(service_name, "/"),
-        "org.freedesktop.DBus.ObjectManager")
+        bus.get_object(service_name, "/"), "org.freedesktop.DBus.ObjectManager"
+    )
 
     # Iterating over objects under the specified service
     # and searching for the specified interface
@@ -49,9 +49,11 @@ def find_object_path(bus, service_name, interface_name, object_name=None):
             continue
         # If the object name wasn't specified or it matches
         # the interface address or the path ending
-        elif (not object_name or
-                object_name == managed_interface["Address"] or
-                path.endswith(object_name)):
+        elif (
+            not object_name
+            or object_name == managed_interface["Address"]
+            or path.endswith(object_name)
+        ):
             obj = bus.get_object(service_name, path)
             return dbus.Interface(obj, interface_name).object_path
 
@@ -75,8 +77,8 @@ def find_objects(bus, service_name, interface_name):
     """
 
     manager = dbus.Interface(
-        bus.get_object(service_name, "/"),
-        "org.freedesktop.DBus.ObjectManager")
+        bus.get_object(service_name, "/"), "org.freedesktop.DBus.ObjectManager"
+    )
     paths = []
 
     # Iterating over objects under the specified service
@@ -101,14 +103,14 @@ def toggle_clean_bluez(toggle):
     service will not be restarted if the input plugin
     already matches the toggle.
 
-    :param toggle: A boolean element indicating if BlueZ 
+    :param toggle: A boolean element indicating if BlueZ
     should be cleaned (True) or not (False)
     :type toggle: boolean
     :raises PermissionError: If the user is not root
     :raises Exception: If the units can't be reloaded
     :raises Exception: If sdptool, hciconfig, or hcitool are not available.
     """
-    logger = logging.getLogger('nxbt')
+    logger = logging.getLogger("nxbt")
 
     # Check systemd is present
     res = _run_command(["ps", "--no-headers", "-o", "comm", "1"])
@@ -166,23 +168,25 @@ def clean_sdp_records():
 
     # Check if sdptool is available for use
     if which("sdptool") is None:
-        raise Exception("sdptool is not available on this system." +
-                        "If you can, please install this tool, as " +
-                        "it is required for proper functionality.")
+        raise Exception(
+            "sdptool is not available on this system."
+            + "If you can, please install this tool, as "
+            + "it is required for proper functionality."
+        )
 
-    # Enable Read/Write to the SDP server. This is a remedy for a 
+    # Enable Read/Write to the SDP server. This is a remedy for a
     # compatibility mode bug introduced in later versions of BlueZ 5
     _run_command(["chmod", "777", "/var/run/sdp"])
 
     # Identify/List all SDP services available with sdptool
-    result = _run_command(['sdptool', 'browse', 'local']).stdout.decode('utf-8')
-    if result is None or len(result.split('\n\n')) < 1:
+    result = _run_command(["sdptool", "browse", "local"]).stdout.decode("utf-8")
+    if result is None or len(result.split("\n\n")) < 1:
         return
-    
+
     # Record all service record handles
     exceptions = ["PnP Information"]
     service_rec_handles = []
-    for rec in result.split('\n\n'):
+    for rec in result.split("\n\n"):
         # Skip if exception is in record
         exception_found = False
         for exception in exceptions:
@@ -193,14 +197,14 @@ def clean_sdp_records():
             continue
 
         # Read lines and add Record Handles to the list
-        for line in rec.split('\n'):
+        for line in rec.split("\n"):
             if "Service RecHandle" in line:
                 service_rec_handles.append(line.split(" ")[2])
-    
+
     # Delete all found service records
     if len(service_rec_handles) > 0:
         for record_handle in service_rec_handles:
-            _run_command(['sdptool', 'del', record_handle])
+            _run_command(["sdptool", "del", record_handle])
 
 
 def _run_command(command):
@@ -213,27 +217,24 @@ def _run_command(command):
     :type command: list
     :raises Exception: On command failure or error
     """
-    result = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE)
+    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     cmd_err = result.stderr.decode("utf-8").replace("\n", "")
     if cmd_err != "":
         raise Exception(cmd_err)
-    
+
     return result
 
 
 def get_random_controller_mac():
-    """Generates a random Switch-compliant MAC address
-    """
+    """Generates a random Switch-compliant MAC address"""
+
     def seg():
-        random_number = random.randint(0,255)
+        random_number = random.randint(0, 255)
         hex_number = str(hex(random_number))
         hex_number = hex_number[2:].upper()
         return str(hex_number)
-    
+
     return f"7C:BB:8A:{seg()}:{seg()}:{seg()}"
 
 
@@ -251,25 +252,40 @@ def replace_mac_addresses(adapter_paths, addresses):
     :type addresses: bool, optional
     """
     if which("hcitool") is None:
-        raise Exception("hcitool is not available on this system." +
-                        "If you can, please install this tool, as " +
-                        "it is required for proper functionality.")
+        raise Exception(
+            "hcitool is not available on this system."
+            + "If you can, please install this tool, as "
+            + "it is required for proper functionality."
+        )
     if which("hciconfig") is None:
-        raise Exception("hciconfig is not available on this system." +
-                        "If you can, please install this tool, as " +
-                        "it is required for proper functionality.")
+        raise Exception(
+            "hciconfig is not available on this system."
+            + "If you can, please install this tool, as "
+            + "it is required for proper functionality."
+        )
 
     if addresses:
         assert len(addresses) == len(adapter_paths)
 
     for i in range(len(adapter_paths)):
-        adapter_id = adapter_paths[i].split('/')[-1]
-        mac = addresses[i].split(':')
-        cmds = ['hcitool', '-i', adapter_id, 'cmd', '0x3f', '0x001',
-                f'0x{mac[5]}',f'0x{mac[4]}',f'0x{mac[3]}',f'0x{mac[2]}',
-                f'0x{mac[1]}',f'0x{mac[0]}']
+        adapter_id = adapter_paths[i].split("/")[-1]
+        mac = addresses[i].split(":")
+        cmds = [
+            "hcitool",
+            "-i",
+            adapter_id,
+            "cmd",
+            "0x3f",
+            "0x001",
+            f"0x{mac[5]}",
+            f"0x{mac[4]}",
+            f"0x{mac[3]}",
+            f"0x{mac[2]}",
+            f"0x{mac[1]}",
+            f"0x{mac[0]}",
+        ]
         _run_command(cmds)
-        _run_command(['hciconfig', adapter_id, 'reset'])
+        _run_command(["hciconfig", adapter_id, "reset"])
 
 
 def find_devices_by_alias(alias, return_path=False, created_bus=None):
@@ -289,24 +305,17 @@ def find_devices_by_alias(alias, return_path=False, created_bus=None):
     else:
         bus = dbus.SystemBus()
     # Find all connected/paired/discovered devices
-    devices = find_objects(
-        bus,
-        SERVICE_NAME,
-        DEVICE_INTERFACE)
+    devices = find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
 
     addresses = []
     matching_paths = []
     for path in devices:
         # Get the device's address and paired status
         device_props = dbus.Interface(
-            bus.get_object(SERVICE_NAME, path),
-            "org.freedesktop.DBus.Properties")
-        device_alias = device_props.Get(
-            DEVICE_INTERFACE,
-            "Alias").upper()
-        device_addr = device_props.Get(
-            DEVICE_INTERFACE,
-            "Address").upper()
+            bus.get_object(SERVICE_NAME, path), "org.freedesktop.DBus.Properties"
+        )
+        device_alias = device_props.Get(DEVICE_INTERFACE, "Alias").upper()
+        device_addr = device_props.Get(DEVICE_INTERFACE, "Address").upper()
 
         # Check for an address match
         if device_alias.upper() == alias.upper():
@@ -335,27 +344,22 @@ def disconnect_devices_by_alias(alias, created_bus=None):
     else:
         bus = dbus.SystemBus()
     # Find all connected/paired/discovered devices
-    devices = find_objects(
-        bus,
-        SERVICE_NAME,
-        DEVICE_INTERFACE)
+    devices = find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
 
     addresses = []
     matching_paths = []
     for path in devices:
         # Get the device's address and paired status
         device_props = dbus.Interface(
-            bus.get_object(SERVICE_NAME, path),
-            "org.freedesktop.DBus.Properties")
-        device_alias = device_props.Get(
-            DEVICE_INTERFACE,
-            "Alias").upper()
+            bus.get_object(SERVICE_NAME, path), "org.freedesktop.DBus.Properties"
+        )
+        device_alias = device_props.Get(DEVICE_INTERFACE, "Alias").upper()
 
         # Check for an alias match
         if device_alias.upper() == alias.upper():
             device = dbus.Interface(
-                bus.get_object(SERVICE_NAME, path),
-                DEVICE_INTERFACE)
+                bus.get_object(SERVICE_NAME, path), DEVICE_INTERFACE
+            )
             try:
                 device.Disconnect()
             except Exception as e:
@@ -366,13 +370,11 @@ def disconnect_devices_by_alias(alias, created_bus=None):
         bus.close()
 
 
-class BlueZ():
-    """Exposes the BlueZ D-Bus API as a Python object.
-    """
+class BlueZ:
+    """Exposes the BlueZ D-Bus API as a Python object."""
 
     def __init__(self, adapter_path="/org/bluez/hci0"):
-
-        self.logger = logging.getLogger('nxbt')
+        self.logger = logging.getLogger("nxbt")
 
         self.bus = dbus.SystemBus()
         self.device_path = adapter_path
@@ -381,9 +383,8 @@ class BlueZ():
         # try to find any usable Bluetooth adapter
         if self.device_path is None:
             self.device_path = find_object_path(
-                self.bus,
-                SERVICE_NAME,
-                ADAPTER_INTERFACE)
+                self.bus, SERVICE_NAME, ADAPTER_INTERFACE
+            )
 
         # If we aren't able to find an adapter still
         if self.device_path is None:
@@ -392,23 +393,21 @@ class BlueZ():
         # Load the adapter's interface
         self.logger.debug(f"Using adapter under object path: {self.device_path}")
         self.device = dbus.Interface(
-            self.bus.get_object(
-                SERVICE_NAME,
-                self.device_path),
-            "org.freedesktop.DBus.Properties")
+            self.bus.get_object(SERVICE_NAME, self.device_path),
+            "org.freedesktop.DBus.Properties",
+        )
 
         self.device_id = self.device_path.split("/")[-1]
 
         # Load the ProfileManager interface
-        self.profile_manager = dbus.Interface(self.bus.get_object(
-            SERVICE_NAME, BLUEZ_OBJECT_PATH),
-            PROFILEMANAGER_INTERFACE)
+        self.profile_manager = dbus.Interface(
+            self.bus.get_object(SERVICE_NAME, BLUEZ_OBJECT_PATH),
+            PROFILEMANAGER_INTERFACE,
+        )
 
         self.adapter = dbus.Interface(
-            self.bus.get_object(
-                SERVICE_NAME,
-                self.device_path),
-            ADAPTER_INTERFACE)
+            self.bus.get_object(SERVICE_NAME, self.device_path), ADAPTER_INTERFACE
+        )
 
     @property
     def address(self):
@@ -426,37 +425,54 @@ class BlueZ():
         For changes to apply, the Bluetooth interface needs to be
         restarted.
 
-        :param mac: A Bluetooth MAC address in 
+        :param mac: A Bluetooth MAC address in
         the form of "XX:XX:XX:XX:XX:XX
         :type mac: str
         :raises PermissionError: On run as non-root user
         :raises Exception: On CLI errors
         """
         if which("hcitool") is None:
-            raise Exception("hcitool is not available on this system." +
-                            "If you can, please install this tool, as " +
-                            "it is required for proper functionality.")
+            raise Exception(
+                "hcitool is not available on this system."
+                + "If you can, please install this tool, as "
+                + "it is required for proper functionality."
+            )
         # Reverse MAC (element position-wise) for use with hcitool
         mac = mac.split(":")
-        cmds = ['hcitool', '-i', self.device_id, 'cmd', '0x3f', '0x001',
-                f'0x{mac[5]}',f'0x{mac[4]}',f'0x{mac[3]}',f'0x{mac[2]}',
-                f'0x{mac[1]}',f'0x{mac[0]}']
+        cmds = [
+            "hcitool",
+            "-i",
+            self.device_id,
+            "cmd",
+            "0x3f",
+            "0x001",
+            f"0x{mac[5]}",
+            f"0x{mac[4]}",
+            f"0x{mac[3]}",
+            f"0x{mac[2]}",
+            f"0x{mac[1]}",
+            f"0x{mac[0]}",
+        ]
         _run_command(cmds)
-        _run_command(['hciconfig', self.device_id, 'reset'])
+        _run_command(["hciconfig", self.device_id, "reset"])
 
     def set_class(self, device_class):
         if which("hciconfig") is None:
-            raise Exception("hciconfig is not available on this system." +
-                            "If you can, please install this tool, as " +
-                            "it is required for proper functionality.")
-        _run_command(['hciconfig', self.device_id, 'class', device_class])
+            raise Exception(
+                "hciconfig is not available on this system."
+                + "If you can, please install this tool, as "
+                + "it is required for proper functionality."
+            )
+        _run_command(["hciconfig", self.device_id, "class", device_class])
 
     def reset_adapter(self):
         if which("hciconfig") is None:
-            raise Exception("hciconfig is not available on this system." +
-                            "If you can, please install this tool, as " +
-                            "it is required for proper functionality.")
-        _run_command(['hciconfig', self.device_id, 'reset'])
+            raise Exception(
+                "hciconfig is not available on this system."
+                + "If you can, please install this tool, as "
+                + "it is required for proper functionality."
+            )
+        _run_command(["hciconfig", self.device_id, "reset"])
 
     @property
     def name(self):
@@ -576,10 +592,7 @@ class BlueZ():
         """
 
         dbus_value = dbus.UInt32(value)
-        self.device.Set(
-            ADAPTER_INTERFACE,
-            "DiscoverableTimeout",
-            dbus_value)
+        self.device.Set(ADAPTER_INTERFACE, "DiscoverableTimeout", dbus_value)
 
     @property
     def device_class(self):
@@ -595,8 +608,8 @@ class BlueZ():
         # of the D-Bus API so that results match the setter. See the
         # setter for further justification on using hciconfig.
         result = subprocess.run(
-            ["hciconfig", self.device_id, "class"],
-            stdout=subprocess.PIPE)
+            ["hciconfig", self.device_id, "class"], stdout=subprocess.PIPE
+        )
         device_class = result.stdout.decode("utf-8").split("Class: ")[1][0:8]
 
         return device_class
@@ -624,8 +637,8 @@ class BlueZ():
         # a config file needs to filled and the BT daemon restarted. This is a
         # good compromise but requires super user privileges. Not ideal.
         result = subprocess.run(
-            ["hciconfig", self.device_id, "class", device_class],
-            stderr=subprocess.PIPE)
+            ["hciconfig", self.device_id, "class", device_class], stderr=subprocess.PIPE
+        )
 
         # Checking if there was a problem setting the device class
         cmd_err = result.stderr.decode("utf-8").replace("\n", "")
@@ -700,23 +713,21 @@ class BlueZ():
         """
 
         result = subprocess.run(
-            ["systemctl", "restart", "bluetooth"],
-            stderr=subprocess.PIPE)
+            ["systemctl", "restart", "bluetooth"], stderr=subprocess.PIPE
+        )
 
         cmd_err = result.stderr.decode("utf-8").replace("\n", "")
         if cmd_err != "":
             raise Exception(cmd_err)
 
         self.device = dbus.Interface(
-            self.bus.get_object(
-                SERVICE_NAME,
-                self.device_path),
-            "org.freedesktop.DBus.Properties")
+            self.bus.get_object(SERVICE_NAME, self.device_path),
+            "org.freedesktop.DBus.Properties",
+        )
         self.profile_manager = dbus.Interface(
-            self.bus.get_object(
-                SERVICE_NAME,
-                BLUEZ_OBJECT_PATH),
-            PROFILEMANAGER_INTERFACE)
+            self.bus.get_object(SERVICE_NAME, BLUEZ_OBJECT_PATH),
+            PROFILEMANAGER_INTERFACE,
+        )
 
     def get_discovered_devices(self):
         """Gets a dict of all discovered (or previously discovered
@@ -736,8 +747,8 @@ class BlueZ():
         """
 
         bluez_objects = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, "/"),
-            "org.freedesktop.DBus.ObjectManager")
+            self.bus.get_object(SERVICE_NAME, "/"), "org.freedesktop.DBus.ObjectManager"
+        )
 
         devices = {}
         objects = bluez_objects.GetManagedObjects()
@@ -830,19 +841,14 @@ class BlueZ():
         """
 
         device = dbus.Interface(
-            self.bus.get_object(
-                SERVICE_NAME,
-                device_path),
-            DEVICE_INTERFACE)
+            self.bus.get_object(SERVICE_NAME, device_path), DEVICE_INTERFACE
+        )
         device.Pair()
 
     def connect_device(self, device_path):
-
         device = dbus.Interface(
-            self.bus.get_object(
-                SERVICE_NAME,
-                device_path),
-            DEVICE_INTERFACE)
+            self.bus.get_object(SERVICE_NAME, device_path), DEVICE_INTERFACE
+        )
         try:
             device.Connect()
         except dbus.exceptions.DBusException as e:
@@ -856,8 +862,7 @@ class BlueZ():
         :type path: string
         """
 
-        self.adapter.RemoveDevice(
-            self.bus.get_object(SERVICE_NAME, path))
+        self.adapter.RemoveDevice(self.bus.get_object(SERVICE_NAME, path))
 
     def find_device_by_address(self, address):
         """Finds the D-Bus path to a device that contains the
@@ -870,18 +875,14 @@ class BlueZ():
         """
 
         # Find all connected/paired/discovered devices
-        devices = find_objects(
-            self.bus,
-            SERVICE_NAME,
-            DEVICE_INTERFACE)
+        devices = find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
         for path in devices:
             # Get the device's address and paired status
             device_props = dbus.Interface(
                 self.bus.get_object(SERVICE_NAME, path),
-                "org.freedesktop.DBus.Properties")
-            device_addr = device_props.Get(
-                DEVICE_INTERFACE,
-                "Address").upper()
+                "org.freedesktop.DBus.Properties",
+            )
+            device_addr = device_props.Get(DEVICE_INTERFACE, "Address").upper()
 
             # Check for an address match
             if device_addr != address.upper():
@@ -889,7 +890,7 @@ class BlueZ():
             return path
 
         return None
-    
+
     def find_connected_devices(self, alias_filter=False):
         """Finds the D-Bus path to a device that contains the
         specified address.
@@ -900,22 +901,16 @@ class BlueZ():
         :rtype: string or None
         """
 
-        devices = find_objects(
-            self.bus,
-            SERVICE_NAME,
-            DEVICE_INTERFACE)
+        devices = find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
         conn_devices = []
         for path in devices:
             # Get the device's connection status
             device_props = dbus.Interface(
                 self.bus.get_object(SERVICE_NAME, path),
-                "org.freedesktop.DBus.Properties")
-            device_conn_status = device_props.Get(
-                DEVICE_INTERFACE,
-                "Connected")
-            device_alias = device_props.Get(
-                DEVICE_INTERFACE,
-                "Alias").upper()
+                "org.freedesktop.DBus.Properties",
+            )
+            device_conn_status = device_props.Get(DEVICE_INTERFACE, "Connected")
+            device_alias = device_props.Get(DEVICE_INTERFACE, "Alias").upper()
 
             if device_conn_status:
                 if alias_filter and device_alias == alias_filter.upper():

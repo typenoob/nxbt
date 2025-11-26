@@ -17,9 +17,9 @@ def replace_subarray(arr, start, num_elms, value=0, replace_arr=None):
     """
 
     if replace_arr:
-        arr[start:start + num_elms] = replace_arr
+        arr[start : start + num_elms] = replace_arr
     else:
-        arr[start:start + num_elms] = [value] * num_elms
+        arr[start : start + num_elms] = [value] * num_elms
 
 
 def format_message(data, split, name):
@@ -48,9 +48,10 @@ def format_message(data, split, name):
             subcommand += "0x" + data_byte + " "
 
     formatted = (
-        f"--- {name} Msg ---\n" +
-        f"Payload:    {payload}\n" +
-        f"Subcommand: {subcommand}")
+        f"--- {name} Msg ---\n"
+        + f"Payload:    {payload}\n"
+        + f"Subcommand: {subcommand}"
+    )
 
     return formatted
 

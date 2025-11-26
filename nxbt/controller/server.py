@@ -16,13 +16,18 @@ from .input import InputParser
 from .utils import format_msg_controller, format_msg_switch
 
 
-class ControllerServer():
-
-    def __init__(self, controller_type, adapter_path="/org/bluez/hci0",
-                 state=None, task_queue=None, lock=None, colour_body=None,
-                 colour_buttons=None):
-
-        self.logger = logging.getLogger('nxbt')
+class ControllerServer:
+    def __init__(
+        self,
+        controller_type,
+        adapter_path="/org/bluez/hci0",
+        state=None,
+        task_queue=None,
+        lock=None,
+        colour_body=None,
+        colour_buttons=None,
+    ):
+        self.logger = logging.getLogger("nxbt")
         # Cache logging level to increase performance on checks
         self.logger_level = self.logger.level
 
@@ -35,7 +40,7 @@ class ControllerServer():
                 "state": "",
                 "finished_macros": [],
                 "errors": None,
-                "direct_input": None
+                "direct_input": None,
             }
 
         self.task_queue = task_queue
@@ -57,7 +62,8 @@ class ControllerServer():
             self.controller_type,
             self.bt.address,
             colour_body=self.colour_body,
-            colour_buttons=self.colour_buttons)
+            colour_buttons=self.colour_buttons,
+        )
 
         self.input = InputParser(self.protocol)
 
@@ -66,7 +72,7 @@ class ControllerServer():
 
         # Initial reconnection overload protection
         self.tick = 1
-        self.cached_msg = ''
+        self.cached_msg = ""
 
     def run(self, reconnect_address=None):
         """Runs the mainloop of the controller server.
@@ -117,7 +123,6 @@ class ControllerServer():
                 self.logger.debug(traceback.format_exc())
 
     def mainloop(self, itr, ctrl):
-
         duration_start = time.perf_counter()
         while True:
             # Start timing command processing
@@ -137,11 +142,9 @@ class ControllerServer():
                     while True:
                         msg = self.task_queue.get_nowait()
                         if msg and msg["type"] == "macro":
-                            self.input.buffer_macro(
-                                msg["macro"], msg["macro_id"])
+                            self.input.buffer_macro(msg["macro"], msg["macro_id"])
                         elif msg and msg["type"] == "stop":
-                            self.input.stop_macro(
-                                msg["macro_id"], state=self.state)
+                            self.input.stop_macro(msg["macro_id"], state=self.state)
                         elif msg and msg["type"] == "clear":
                             self.input.clear_macros()
                 except queue.Empty:
@@ -180,8 +183,8 @@ class ControllerServer():
             duration_end = time.perf_counter()
             duration_elapsed = duration_end - duration_start
             duration_start = duration_end
-            
-            sleep_time = 1/132 - duration_elapsed
+
+            sleep_time = 1 / 132 - duration_elapsed
             if sleep_time >= 0:
                 time.sleep(sleep_time)
             self.tick += 1
@@ -192,12 +195,9 @@ class ControllerServer():
                     self.times.pop()
                 mean_time = stat.mean(self.times)
 
-                self.logger.debug(
-                    f"Tick: {self.tick}, Mean Time: {str(1/mean_time)}")
-
+                self.logger.debug(f"Tick: {self.tick}, Mean Time: {str(1 / mean_time)}")
 
     def save_connection(self, error, state=None):
-
         while self.reconnect_counter < 2:
             try:
                 self.logger.debug("Attempting to reconnect")
@@ -206,7 +206,8 @@ class ControllerServer():
                     self.controller_type,
                     self.bt.address,
                     colour_body=self.colour_body,
-                    colour_buttons=self.colour_buttons)
+                    colour_buttons=self.colour_buttons,
+                )
                 self.input.reassign_protocol(self.protocol)
                 if self.lock:
                     self.lock.acquire()
@@ -239,8 +240,12 @@ class ControllerServer():
 
                         # Exit pairing loop when player lights have been set and
                         # vibration has been enabled
-                        if (reply and len(reply) > 45 and
-                                self.protocol.vibration_enabled and self.protocol.player_number):
+                        if (
+                            reply
+                            and len(reply) > 45
+                            and self.protocol.vibration_enabled
+                            and self.protocol.player_number
+                        ):
                             break
 
                         # Switch responds to packets slower during pairing
@@ -248,7 +253,7 @@ class ControllerServer():
                         if not received_first_message:
                             time.sleep(1)
                         else:
-                            time.sleep(1/15)
+                            time.sleep(1 / 15)
 
                     self.state["state"] = "connected"
                     return itr, ctrl
@@ -273,7 +278,8 @@ class ControllerServer():
             self.controller_type,
             self.bt.address,
             colour_body=self.colour_body,
-            colour_buttons=self.colour_buttons)
+            colour_buttons=self.colour_buttons,
+        )
         self.input.reassign_protocol(self.protocol)
 
         # Since we were forced to attempt a reconnection
@@ -282,9 +288,13 @@ class ControllerServer():
         if self.controller_type == ControllerTypes.PRO_CONTROLLER:
             self.input.current_macro_commands = "L R 0.0s".strip(" ").split(" ")
         elif self.controller_type == ControllerTypes.JOYCON_L:
-            self.input.current_macro_commands = "JCL_SL JCL_SR 0.0s".strip(" ").split(" ")
+            self.input.current_macro_commands = "JCL_SL JCL_SR 0.0s".strip(" ").split(
+                " "
+            )
         elif self.controller_type == ControllerTypes.JOYCON_R:
-            self.input.current_macro_commands = "JCR_SL JCR_SR 0.0s".strip(" ").split(" ")
+            self.input.current_macro_commands = "JCR_SL JCR_SR 0.0s".strip(" ").split(
+                " "
+            )
 
         if self.lock:
             self.lock.acquire()
@@ -301,7 +311,6 @@ class ControllerServer():
         return itr, ctrl
 
     def connection_reset_watchdog(self):
-
         connected_devices = []
         connected_devices_count = {}
         while self._crw_running:
@@ -309,7 +318,7 @@ class ControllerServer():
             # Keep track of Switches that connect
             if len(paths) > 0:
                 connected_devices = list(set(connected_devices + paths))
-            
+
             # Increment a counter if a Switch connected and disconnected
             disconnected = list(set(connected_devices) - set(paths))
             if len(disconnected) > 0:
@@ -319,7 +328,7 @@ class ControllerServer():
                     else:
                         connected_devices_count[path] += 1
                 connected_devices = list(set(connected_devices) - set(disconnected))
-            
+
             # Delete Switches that connect/disconnect twice.
             # This behaviour is characteristic of connection issues and is corrected
             # by removing the Switch's connection to the system.
@@ -327,7 +336,8 @@ class ControllerServer():
                 for key in connected_devices_count.keys():
                     if connected_devices_count[key] >= 2:
                         self.logger.debug(
-                            "A Nintendo Switch disconnected. Resetting Connection...")
+                            "A Nintendo Switch disconnected. Resetting Connection..."
+                        )
                         self.logger.debug(f"Removing {str(key)}")
                         self.bt.remove_device(key)
                         connected_devices_count[key] = 0
@@ -351,11 +361,13 @@ class ControllerServer():
                 s_ctrl = socket.socket(
                     family=socket.AF_BLUETOOTH,
                     type=socket.SOCK_SEQPACKET,
-                    proto=socket.BTPROTO_L2CAP)
+                    proto=socket.BTPROTO_L2CAP,
+                )
                 s_itr = socket.socket(
                     family=socket.AF_BLUETOOTH,
                     type=socket.SOCK_SEQPACKET,
-                    proto=socket.BTPROTO_L2CAP)
+                    proto=socket.BTPROTO_L2CAP,
+                )
 
                 # Setting up HID interrupt/control sockets
                 try:
@@ -377,7 +389,7 @@ class ControllerServer():
                 self.bt.set_class("0x02508")
 
                 self._crw_running = True
-                crw = Thread(target = self.connection_reset_watchdog)
+                crw = Thread(target=self.connection_reset_watchdog)
                 crw.start()
 
                 itr, itr_address = s_itr.accept()
@@ -422,8 +434,12 @@ class ControllerServer():
 
                     # Exit pairing loop when player lights have been set and
                     # vibration has been enabled
-                    if (reply and len(reply) > 45 and
-                            self.protocol.vibration_enabled and self.protocol.player_number):
+                    if (
+                        reply
+                        and len(reply) > 45
+                        and self.protocol.vibration_enabled
+                        and self.protocol.player_number
+                    ):
                         break
 
                     # Switch responds to packets slower during pairing
@@ -431,8 +447,8 @@ class ControllerServer():
                     if not received_first_message:
                         time.sleep(1)
                     else:
-                        time.sleep(1/15)
-                
+                        time.sleep(1 / 15)
+
                 break
             except OSError as e:
                 self.logger.debug(e)
@@ -453,11 +469,13 @@ class ControllerServer():
             ctrl = socket.socket(
                 family=socket.AF_BLUETOOTH,
                 type=socket.SOCK_SEQPACKET,
-                proto=socket.BTPROTO_L2CAP)
+                proto=socket.BTPROTO_L2CAP,
+            )
             itr = socket.socket(
                 family=socket.AF_BLUETOOTH,
                 type=socket.SOCK_SEQPACKET,
-                proto=socket.BTPROTO_L2CAP)
+                proto=socket.BTPROTO_L2CAP,
+            )
 
             return itr, ctrl
 
@@ -490,8 +508,10 @@ class ControllerServer():
             ctrl = test_ctrl
 
         if not itr and not ctrl:
-            raise OSError("Unable to reconnect to sockets at the given address(es)",
-                          reconnect_address)
+            raise OSError(
+                "Unable to reconnect to sockets at the given address(es)",
+                reconnect_address,
+            )
 
         fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
 
