@@ -187,15 +187,15 @@ sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/63/fe/a17c106a1f4061
 
 [[package]]
 name = "eventlet"
-version = "0.39.0"
+version = "0.40.3"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 dependencies = [
     { name = "dnspython" },
     { name = "greenlet" },
 ]
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/05/97/44dca90de4acc0d2d6e68783d53c50257dd96ad3ac4139f52738d4b9fbb9/eventlet-0.39.0.tar.gz", hash = "sha256:01ba0aa6ee2452690fc02b274a2409598a13b997c7b5af9dc66600fa42015a79", size = 562164, upload-time = "2025-01-24T13:37:31.551Z" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/ce/4f/1e5227b23aa77d9ea05056b98cf0bf187cca994991060245002b640f9830/eventlet-0.40.3.tar.gz", hash = "sha256:290852db0065d78cec17a821b78c8a51cafb820a792796a354592ae4d5fceeb0", size = 565741, upload-time = "2025-08-27T09:56:16.085Z" }
 wheels = [
-    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/8d/08/f086fa53ff8092a72b7922d51838b85d6b5751b439469767690d56843879/eventlet-0.39.0-py3-none-any.whl", hash = "sha256:9522ca09ad4c1f874c238f06492a7e217ddb13bdeace4475d3b700dd0ba1f6be", size = 363347, upload-time = "2025-01-24T13:37:28.699Z" },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/6e/b4/981362608131dc4ee8de9fdca6a38ef19e3da66ab6a13937bd158882db91/eventlet-0.40.3-py3-none-any.whl", hash = "sha256:e681cae6ee956cfb066a966b5c0541e734cc14879bda6058024104790595ac9d", size = 364333, upload-time = "2025-08-27T09:56:10.774Z" },
 ]
 
 [[package]]
@@ -464,7 +464,7 @@ requires-dist = [
     { name = "blessed", specifier = "==1.17.10" },
     { name = "cryptography", specifier = "==3.3.2" },
     { name = "dbus-python", specifier = "==1.3.2" },
-    { name = "eventlet", specifier = "==0.39.0" },
+    { name = "eventlet", specifier = "==0.40.3" },
     { name = "flask", specifier = "==3.1.0" },
     { name = "flask-socketio", specifier = "==5.3.4" },
     { name = "itsdangerous", specifier = "==2.2" },

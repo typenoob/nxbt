@@ -144,3 +144,6 @@ Vagrantfile
 .vagrant
 cert.pem
 key.pem
+
+# UV
+.python-version
