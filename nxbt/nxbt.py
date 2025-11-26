@@ -186,7 +186,7 @@ class Nxbt():
         # Starting the nxbt worker process
         self.controllers = Process(
             target=self._command_manager,
-            args=((self.task_queue), (self.manager_state)))
+            args=((self.task_queue), (self.manager_state), (self._bluetooth_lock)))
         # Disabling daemonization since we need to spawn
         # other controller processes, however, this means
         # we need to cleanup on exit.
@@ -210,7 +210,8 @@ class Nxbt():
         # Re-enable the BlueZ plugins, if we have permission
         toggle_clean_bluez(False)
 
-    def _command_manager(self, task_queue, state):
+    @staticmethod
+    def _command_manager(task_queue, state, bluetooth_lock):
         """Used as the main multiprocessing Process that is launched
         on startup to handle the message passing and instantiation of
         the controllers. Messages are pulled out of a Queue and passed
@@ -224,10 +225,10 @@ class Nxbt():
         :type state: multiprocessing.Manager().dict
         """
 
-        cm = _ControllerManager(state, self._bluetooth_lock)
+        cm = _ControllerManager(state, bluetooth_lock)
         # Ensure a SystemExit exception is raised on SIGTERM
         # so that we can gracefully shutdown.
-        signal.signal(signal.SIGTERM, lambda sigterm_handler: sys.exit(0))
+        signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
 
         try:
             while True:
