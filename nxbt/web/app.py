@@ -6,16 +6,11 @@ import time
 from socket import gethostname
 
 from .cert import generate_cert
+from ..utils import load_file
 from ..nxbt import Nxbt, PRO_CONTROLLER
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 import eventlet
-
-def load_file(file_name):
-    if '__compiled__' in globals():
-        return os.path.join(os.path.dirname(sys.argv[0]), file_name)
-    else:
-        return os.path.join(os.path.dirname(__file__), file_name)
 
 app = Flask(__name__,
             static_url_path='',
@@ -24,8 +19,7 @@ app = Flask(__name__,
 nxbt = Nxbt()
 
 # Configuring/retrieving secret key
-secrets_path = load_file("secrets.txt")
-print(secrets_path)
+secrets_path = load_file("secrets.txt", True)
 if not os.path.isfile(secrets_path):
     secret_key = os.urandom(24).hex()
     with open(secrets_path, "w") as f:
@@ -116,8 +110,8 @@ def start_web_app(ip='0.0.0.0', port=8000, usessl=False, cert_path=None):
     if usessl:
         if cert_path is None:
             # Store certs in the package directory
-            cert_path = load_file("cert.pem")
-            key_path = load_file("key.pem")
+            cert_path = load_file("cert.pem", True)
+            key_path = load_file("key.pem", True)
         else:
             # If specified, store certs at the user's preferred location
             cert_path = os.path.join(

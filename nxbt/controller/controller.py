@@ -3,6 +3,7 @@ import os
 import sys
 from enum import Enum
 
+from ..utils import load_file
 import dbus
 
 
@@ -44,12 +45,8 @@ class Controller:
         self.bt.set_discoverable_timeout(180)
 
         self.bt.set_alias(self.alias)
-        if getattr(sys, "frozen", False):
-            path = sys._MEIPASS
-        elif __file__:
-            path = os.path.dirname(__file__)
         # Adding the SDP record
-        sdp_record_path = os.path.join(path, "sdp", "switch-controller.xml")
+        sdp_record_path = load_file("sdp/switch-controller.xml")
         sdp_record = None
         with open(sdp_record_path, "r") as f:
             sdp_record = f.read()
