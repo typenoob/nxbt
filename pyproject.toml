@@ -1,6 +1,6 @@
 [project]
 name = "nxbt"
-version = "0.1.4"
+version = "0.1.0"
 description = "Control your Nintendo Switch through a website, terminal, or macro."
 readme = {file = "README.md", content-type = "text/markdown"}
 authors = [

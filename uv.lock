@@ -448,7 +448,7 @@ sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/10/d9/c202b2e9d91f16
 
 [[package]]
 name = "nxbt"
-version = "0.1.4"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "blessed" },
