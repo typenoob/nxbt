@@ -34,9 +34,6 @@ jobs:
             platform: linux/arm64/v8
             id: musl-aarch64
           - libc: musl
-            platform: linux/ppc64le
-            id: musl-ppc64le
-          - libc: musl
             platform: linux/s390x
             id: musl-s390x
           - libc: gnu
