@@ -8,3 +8,4 @@ RUN wget -qO- https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 RUN uv run --no-managed-python nuitka nxbt \
     && zip -r nxbt.zip ./release
+RUN ln -s /nxbt/release/nxbt /bin/nxbt
