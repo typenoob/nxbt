@@ -93,13 +93,13 @@ jobs:
         run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:${{ env.VERSION }}-${{ matrix.id }}
       - name: Copy the elf file
         run: |
-          sudo docker cp extract:/nxbt/dist/entrypoint /nxbt-${{ matrix.id }}
+          sudo docker cp extract:/nxbt/nxbt.zip /nxbt-${{ matrix.id }}.zip
       - name: Archive production artifacts
         uses: actions/upload-artifact@v3
         with:
           name: artifacts
           path: |
-            /nxbt-${{ matrix.id }}
+            /nxbt-${{ matrix.id }}.zip
       - name: Generate release tag
         id: tag
         run: |
