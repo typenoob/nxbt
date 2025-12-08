@@ -6,6 +6,6 @@ RUN apt update \
     && apt install -y wget python3 python3-dev python3-pip libssl-dev libdbus-glib-1-dev libdbus-1-dev patchelf procps zip
 RUN wget -qO- https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
-RUN uv run --no-managed-python nuitka nxbt \
+RUN uv run --no-managed-python nuitka -j 4 nxbt \
     && zip -r nxbt.zip ./release
 RUN ln -s /nxbt/release/nxbt /bin/nxbt
