@@ -1,8 +1,7 @@
 FROM debian:oldoldstable-slim
 RUN mkdir nxbt
 WORKDIR /nxbt
-COPY ./pyproject.toml ./pyproject.toml
-COPY ./nxbt ./nxbt
+COPY . .
 RUN apt update \
     && apt install -y wget python3 python3-dev python3-pip python3-venv libssl-dev libdbus-glib-1-dev libdbus-1-dev procps
 RUN wget -qO- https://astral.sh/uv/install.sh | sh
