@@ -33,9 +33,6 @@ jobs:
           - libc: musl
             platform: linux/arm64/v8
             id: musl-aarch64
-          - libc: musl
-            platform: linux/s390x
-            id: musl-s390x
           - libc: gnu
             platform: linux/386
             id: gnu-i386
