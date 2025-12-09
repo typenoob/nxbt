@@ -24,27 +24,27 @@ jobs:
           - libc: musl
             platform: linux/amd64
             id: musl-amd64
-          - libc: musl
-            platform: linux/arm/v6
-            id: musl-armv6
-          - libc: musl
-            platform: linux/arm/v7
-            id: musl-armv7
-          - libc: musl
-            platform: linux/arm64/v8
-            id: musl-aarch64
-          - libc: gnu
-            platform: linux/386
-            id: gnu-i386
-          - libc: gnu
-            platform: linux/amd64
-            id: gnu-amd64
-          - libc: gnu
-            platform: linux/arm/v7
-            id: gnu-armv7
-          - libc: gnu
-            platform: linux/arm64/v8
-            id: gnu-aarch64
+          # - libc: musl
+          #   platform: linux/arm/v6
+          #   id: musl-armv6
+          # - libc: musl
+          #   platform: linux/arm/v7
+          #   id: musl-armv7
+          # - libc: musl
+          #   platform: linux/arm64/v8
+          #   id: musl-aarch64
+          # - libc: gnu
+          #   platform: linux/386
+          #   id: gnu-i386
+          # - libc: gnu
+          #   platform: linux/amd64
+          #   id: gnu-amd64
+          # - libc: gnu
+          #   platform: linux/arm/v7
+          #   id: gnu-armv7
+          # - libc: gnu
+          #   platform: linux/arm64/v8
+          #   id: gnu-aarch64
     steps:
       - run: |
           matrix=$((
@@ -91,7 +91,7 @@ jobs:
       - name: Archive production artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: artifacts
+          name: artifacts-${{ matrix.id }}
           path: |
             /nxbt-${{ matrix.id }}.zip
       - name: Generate release tag
@@ -103,7 +103,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.release_tag }}
           files: |
-            /nxbt-${{ matrix.id }}
+            /nxbt-${{ matrix.id }}.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
