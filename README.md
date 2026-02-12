@@ -2,6 +2,8 @@
 
 Since [Brikwerk](https://github.com/Brikwerk) is no longer active in github nowadays. I intend to maintain this project on this branch to ensure its continued development.
 
+The windows support is roughly validated works now. I'll update when I have time !!!
+
 ## Plans
 
 My plan is to commence by maintaining a fork of the project. Upon reaching a sufficient scale and independence, I will establish it as a standalone repository.
