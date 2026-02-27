@@ -1,5 +1,4 @@
 import subprocess
-import re
 import os
 import time
 import logging
@@ -17,7 +16,7 @@ PROFILEMANAGER_INTERFACE = SERVICE_NAME + ".ProfileManager1"
 DEVICE_INTERFACE = SERVICE_NAME + ".Device1"
 
 
-def find_object_path(bus, service_name, interface_name, object_name=None):
+def _find_object_path(bus, service_name, interface_name, object_name=None):
     """Searches for a D-Bus object path that contains a specified interface
     under a specified service.
 
@@ -60,7 +59,7 @@ def find_object_path(bus, service_name, interface_name, object_name=None):
     return None
 
 
-def find_objects(bus, service_name, interface_name):
+def _find_objects(bus, service_name, interface_name):
     """Searches for D-Bus objects that contain a specified interface
     under a specified service.
 
@@ -305,7 +304,7 @@ def find_devices_by_alias(alias, return_path=False, created_bus=None):
     else:
         bus = dbus.SystemBus()
     # Find all connected/paired/discovered devices
-    devices = find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
+    devices = _find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
 
     addresses = []
     matching_paths = []
@@ -344,10 +343,8 @@ def disconnect_devices_by_alias(alias, created_bus=None):
     else:
         bus = dbus.SystemBus()
     # Find all connected/paired/discovered devices
-    devices = find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
+    devices = _find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
 
-    addresses = []
-    matching_paths = []
     for path in devices:
         # Get the device's address and paired status
         device_props = dbus.Interface(
@@ -382,7 +379,7 @@ class BlueZ:
         # If we weren't able to find an adapter with the specified ID,
         # try to find any usable Bluetooth adapter
         if self.device_path is None:
-            self.device_path = find_object_path(
+            self.device_path = _find_object_path(
                 self.bus, SERVICE_NAME, ADAPTER_INTERFACE
             )
 
@@ -875,7 +872,7 @@ class BlueZ:
         """
 
         # Find all connected/paired/discovered devices
-        devices = find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
+        devices = _find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
         for path in devices:
             # Get the device's address and paired status
             device_props = dbus.Interface(
@@ -901,7 +898,7 @@ class BlueZ:
         :rtype: string or None
         """
 
-        devices = find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
+        devices = _find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
         conn_devices = []
         for path in devices:
             # Get the device's connection status
