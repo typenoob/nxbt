@@ -243,12 +243,6 @@ wheels = [
 ]
 
 [[package]]
-name = "dbus-python"
-version = "1.3.2"
-source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/c1/d3/6be85a9c772d6ebba0cc3ab37390dd6620006dcced758667e0217fb13307/dbus-python-1.3.2.tar.gz", hash = "sha256:ad67819308618b5069537be237f8e68ca1c7fcc95ee4a121fe6845b1418248f8", size = 605495, upload-time = "2022-09-06T20:46:32.956Z" }
-
-[[package]]
 name = "dnspython"
 version = "2.7.0"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -600,7 +594,6 @@ dependencies = [
     { name = "blessed" },
     { name = "cryptography" },
     { name = "dbus-fast" },
-    { name = "dbus-python" },
     { name = "eventlet" },
     { name = "flask" },
     { name = "flask-socketio" },
@@ -628,7 +621,6 @@ requires-dist = [
     { name = "blessed", specifier = "==1.17.10" },
     { name = "cryptography", specifier = "==3.3.2" },
     { name = "dbus-fast", specifier = "==2.45.1" },
-    { name = "dbus-python", specifier = "==1.3.2" },
     { name = "eventlet", specifier = "==0.40.3" },
     { name = "flask", specifier = "==3.1.0" },
     { name = "flask-socketio", specifier = "==5.3.4" },

@@ -8,12 +8,10 @@ import sys
 import time
 import json
 
-import dbus
 
 from .controller import ControllerServer
 from .controller import ControllerTypes
-from .bluez import BlueZ, find_objects, toggle_clean_bluez
-from .bluez import replace_mac_addresses
+from .bluez import find_objects, toggle_clean_bluez
 from .bluez import find_devices_by_alias
 from .bluez import SERVICE_NAME, ADAPTER_INTERFACE
 from .logging import create_logger
@@ -665,9 +663,7 @@ class Nxbt:
         :rtype: list
         """
 
-        bus = dbus.SystemBus()
-        adapters = find_objects(bus, SERVICE_NAME, ADAPTER_INTERFACE)
-        bus.close()
+        adapters = find_objects(SERVICE_NAME, ADAPTER_INTERFACE)
 
         return adapters
 

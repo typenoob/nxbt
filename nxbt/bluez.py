@@ -1,6 +1,5 @@
 import asyncio
 import subprocess
-import re
 import os
 import time
 import logging
@@ -9,8 +8,7 @@ from shutil import which
 import random
 from pathlib import Path
 
-import dbus
-from dbus_fast import BusType, Message
+from dbus_fast import BusType, Message, Variant
 from dbus_fast.aio.message_bus import MessageBus
 
 AGENT_PATH = "/nxbt/agent"
@@ -22,8 +20,85 @@ ADAPTER_INTERFACE = SERVICE_NAME + ".Adapter1"
 PROFILEMANAGER_INTERFACE = SERVICE_NAME + ".ProfileManager1"
 DEVICE_INTERFACE = SERVICE_NAME + ".Device1"
 
+OM_IFACE = "org.freedesktop.DBus.ObjectManager"
+PROPS_IFACE = "org.freedesktop.DBus.Properties"
 
-def find_object_path(bus, service_name, interface_name, object_name=None):
+
+def _run_async(coro):
+    """Run an async dbus call synchronously."""
+    return asyncio.run(coro)
+
+
+async def _get_managed_objects(bus, service_name=SERVICE_NAME):
+    """Fetch managed objects from a D-Bus service."""
+    msg = Message(
+        destination=service_name,
+        path="/",
+        interface=OM_IFACE,
+        member="GetManagedObjects",
+    )
+    reply = await bus.call(msg)
+    return reply.body[0]
+
+
+async def _get_property(bus, path, interface, prop):
+    """Get a D-Bus property, unwrapping the Variant."""
+    msg = Message(
+        destination=SERVICE_NAME,
+        path=path,
+        interface=PROPS_IFACE,
+        member="Get",
+        signature="ss",
+        body=[interface, prop],
+    )
+    reply = await bus.call(msg)
+    variant = reply.body[0]
+    return variant.value if hasattr(variant, "value") else variant
+
+
+async def _set_property(bus, path, interface, prop, value):
+    """Set a D-Bus property."""
+    sig = _guess_signature(value)
+    msg = Message(
+        destination=SERVICE_NAME,
+        path=path,
+        interface=PROPS_IFACE,
+        member="Set",
+        signature="ssv",
+        body=[interface, prop, Variant(sig, value)],
+    )
+    await bus.call(msg)
+
+
+async def _call_method(bus, path, interface, member, signature="", body=None):
+    """Call a D-Bus method."""
+    msg = Message(
+        destination=SERVICE_NAME,
+        path=path,
+        interface=interface,
+        member=member,
+        signature=signature,
+        body=body or [],
+    )
+    return await bus.call(msg)
+
+
+def _guess_signature(value):
+    """Guess the D-Bus signature for a Python value."""
+    if isinstance(value, bool):
+        return "b"
+    if isinstance(value, int):
+        return "u"
+    if isinstance(value, str):
+        return "s"
+    if isinstance(value, dict):
+        return "a{sv}"
+    if isinstance(value, list):
+        return "as"
+    return "s"
+
+
+def find_object_path(service_name, interface_name, object_name=None):
     """Searches for a D-Bus object path that contains a specified interface
     under a specified service.
 
@@ -43,30 +118,27 @@ def find_object_path(bus, service_name, interface_name, object_name=None):
     :rtype: string
     """
 
-    manager = dbus.Interface(
-        bus.get_object(service_name, "/"), "org.freedesktop.DBus.ObjectManager"
-    )
+    async def _find():
+        conn = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        objects = await _get_managed_objects(conn, service_name)
+        conn.disconnect()
 
-    # Iterating over objects under the specified service
-    # and searching for the specified interface
-    for path, ifaces in manager.GetManagedObjects().items():
-        managed_interface = ifaces.get(interface_name)
-        if managed_interface is None:
-            continue
-        # If the object name wasn't specified or it matches
-        # the interface address or the path ending
-        elif (
-            not object_name
-            or object_name == managed_interface["Address"]
-            or path.endswith(object_name)
-        ):
-            obj = bus.get_object(service_name, path)
-            return dbus.Interface(obj, interface_name).object_path
+        for path, ifaces in objects.items():
+            managed_interface = ifaces.get(interface_name)
+            if managed_interface is None:
+                continue
+            elif (
+                not object_name
+                or object_name == managed_interface.get("Address")
+                or path.endswith(object_name)
+            ):
+                return str(path)
+        return None
 
-    return None
+    return _run_async(_find())
 
 
-def find_objects(bus, service_name, interface_name):
+def find_objects(service_name, interface_name):
     """Searches for D-Bus objects that contain a specified interface
     under a specified service.
 
@@ -82,23 +154,18 @@ def find_objects(bus, service_name, interface_name):
     :rtype: array
     """
 
-    manager = dbus.Interface(
-        bus.get_object(service_name, "/"), "org.freedesktop.DBus.ObjectManager"
-    )
-    paths = []
+    async def _find():
+        conn = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        objects = await _get_managed_objects(conn, service_name)
+        conn.disconnect()
 
-    # Iterating over objects under the specified service
-    # and searching for the specified interface within them
-    for path, ifaces in manager.GetManagedObjects().items():
-        managed_interface = ifaces.get(interface_name)
-        if managed_interface is None:
-            continue
-        else:
-            obj = bus.get_object(service_name, path)
-            path = str(dbus.Interface(obj, interface_name).object_path)
-            paths.append(path)
+        paths = []
+        for path, ifaces in objects.items():
+            if interface_name in ifaces:
+                paths.append(str(path))
+        return paths
 
-    return paths
+    return _run_async(_find())
 
 
 def toggle_clean_bluez(toggle):
@@ -306,31 +373,35 @@ def find_devices_by_alias(alias, return_path=False, created_bus=None):
     :rtype: string or None
     """
 
-    if created_bus is not None:
-        bus = created_bus
-    else:
-        bus = dbus.SystemBus()
-    # Find all connected/paired/discovered devices
-    devices = find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
+    async def _find():
+        own_bus = created_bus is None
+        if own_bus:
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        else:
+            bus = created_bus
+        objects = await _get_managed_objects(bus)
 
-    addresses = []
-    matching_paths = []
-    for path in devices:
-        # Get the device's address and paired status
-        device_props = dbus.Interface(
-            bus.get_object(SERVICE_NAME, path), "org.freedesktop.DBus.Properties"
-        )
-        device_alias = device_props.Get(DEVICE_INTERFACE, "Alias").upper()
-        device_addr = device_props.Get(DEVICE_INTERFACE, "Address").upper()
+        addresses = []
+        matching_paths = []
+        for path, ifaces in objects.items():
+            if DEVICE_INTERFACE not in ifaces:
+                continue
+            device_alias = (
+                await _get_property(bus, path, DEVICE_INTERFACE, "Alias")
+            ).upper()
+            device_addr = (
+                await _get_property(bus, path, DEVICE_INTERFACE, "Address")
+            ).upper()
 
-        # Check for an address match
-        if device_alias.upper() == alias.upper():
-            addresses.append(device_addr)
-            matching_paths.append(path)
+            if device_alias.upper() == alias.upper():
+                addresses.append(device_addr)
+                matching_paths.append(path)
 
-    # Close the dbus connection if we created one
-    if created_bus is None:
-        bus.close()
+        if own_bus:
+            bus.disconnect()
+        return addresses, matching_paths
+
+    addresses, matching_paths = _run_async(_find())
 
     if return_path:
         return addresses, matching_paths
@@ -345,35 +416,31 @@ def disconnect_devices_by_alias(alias, created_bus=None):
     :type alias: string
     """
 
-    if created_bus is not None:
-        bus = created_bus
-    else:
-        bus = dbus.SystemBus()
-    # Find all connected/paired/discovered devices
-    devices = find_objects(bus, SERVICE_NAME, DEVICE_INTERFACE)
+    async def _disconnect():
+        own_bus = created_bus is None
+        if own_bus:
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+        else:
+            bus = created_bus
+        objects = await _get_managed_objects(bus)
 
-    addresses = []
-    matching_paths = []
-    for path in devices:
-        # Get the device's address and paired status
-        device_props = dbus.Interface(
-            bus.get_object(SERVICE_NAME, path), "org.freedesktop.DBus.Properties"
-        )
-        device_alias = device_props.Get(DEVICE_INTERFACE, "Alias").upper()
+        for path, ifaces in objects.items():
+            if DEVICE_INTERFACE not in ifaces:
+                continue
+            device_alias = (
+                await _get_property(bus, path, DEVICE_INTERFACE, "Alias")
+            ).upper()
 
-        # Check for an alias match
-        if device_alias.upper() == alias.upper():
-            device = dbus.Interface(
-                bus.get_object(SERVICE_NAME, path), DEVICE_INTERFACE
-            )
-            try:
-                device.Disconnect()
-            except Exception as e:
-                print(e)
+            if device_alias.upper() == alias.upper():
+                try:
+                    await _call_method(bus, path, DEVICE_INTERFACE, "Disconnect")
+                except Exception as e:
+                    print(e)
 
-    # Close the dbus connection if we created one
-    if created_bus is None:
-        bus.close()
+        if own_bus:
+            bus.disconnect()
+
+    _run_async(_disconnect())
 
 
 class BlueZ:
@@ -382,15 +449,12 @@ class BlueZ:
     def __init__(self, adapter_path="/org/bluez/hci0"):
         self.logger = logging.getLogger("nxbt")
 
-        self.bus = dbus.SystemBus()
         self.device_path = adapter_path
 
         # If we weren't able to find an adapter with the specified ID,
         # try to find any usable Bluetooth adapter
         if self.device_path is None:
-            self.device_path = find_object_path(
-                self.bus, SERVICE_NAME, ADAPTER_INTERFACE
-            )
+            self.device_path = find_object_path(SERVICE_NAME, ADAPTER_INTERFACE)
 
         # If we aren't able to find an adapter still
         if self.device_path is None:
@@ -398,22 +462,41 @@ class BlueZ:
 
         # Load the adapter's interface
         self.logger.debug(f"Using adapter under object path: {self.device_path}")
-        self.device = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, self.device_path),
-            "org.freedesktop.DBus.Properties",
-        )
 
         self.device_id = self.device_path.split("/")[-1]
 
-        # Load the ProfileManager interface
-        self.profile_manager = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, BLUEZ_OBJECT_PATH),
-            PROFILEMANAGER_INTERFACE,
-        )
+    def _prop(self, prop):
+        """Get a property on the adapter."""
 
-        self.adapter = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, self.device_path), ADAPTER_INTERFACE
-        )
+        async def _do():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            val = await _get_property(bus, self.device_path, ADAPTER_INTERFACE, prop)
+            bus.disconnect()
+            return val
+
+        return _run_async(_do())
+
+    def _set_prop(self, prop, value):
+        """Set a property on the adapter."""
+
+        async def _do():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            await _set_property(bus, self.device_path, ADAPTER_INTERFACE, prop, value)
+            bus.disconnect()
+
+        _run_async(_do())
+
+    def _call_adapter(self, member, signature="", body=None):
+        """Call a method on the adapter interface."""
+
+        async def _do():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            await _call_method(
+                bus, self.device_path, ADAPTER_INTERFACE, member, signature, body
+            )
+            bus.disconnect()
+
+        _run_async(_do())
 
     @property
     def address(self):
@@ -423,7 +506,7 @@ class BlueZ:
         :rtype: string
         """
 
-        return self.device.Get(ADAPTER_INTERFACE, "Address").upper()
+        return self._prop("Address").upper()
 
     def set_address(self, mac):
         """Sets the Bluetooth MAC address of the Bluetooth adapter.
@@ -488,7 +571,7 @@ class BlueZ:
         :rtype: string
         """
 
-        return self.device.Get(ADAPTER_INTERFACE, "Name")
+        return self._prop("Name")
 
     @property
     def alias(self):
@@ -500,7 +583,7 @@ class BlueZ:
         :rtype: string
         """
 
-        return self.device.Get(ADAPTER_INTERFACE, "Alias")
+        return self._prop("Alias")
 
     def set_alias(self, value):
         """Asynchronously sets the alias of the Bluetooth adapter.
@@ -511,7 +594,7 @@ class BlueZ:
         :type value: string
         """
 
-        self.device.Set(ADAPTER_INTERFACE, "Alias", value)
+        self._set_prop("Alias", value)
 
     @property
     def pairable(self):
@@ -522,7 +605,7 @@ class BlueZ:
         :rtype: boolean
         """
 
-        return bool(self.device.Get(ADAPTER_INTERFACE, "Pairable"))
+        return bool(self._prop("Pairable"))
 
     def set_pairable(self, value):
         """Sets the pariable boolean status of the Bluetooth adapter.
@@ -532,8 +615,7 @@ class BlueZ:
         :type value: boolean
         """
 
-        dbus_value = dbus.Boolean(value)
-        self.device.Set(ADAPTER_INTERFACE, "Pairable", dbus_value)
+        self._set_prop("Pairable", value)
 
     def setup_auto_accept_pairing(self):
         """Registers a NoInputNoOutput agent via dbus_fast to auto-accept
@@ -571,7 +653,7 @@ class BlueZ:
         :rtype: int
         """
 
-        return self.device.Get(ADAPTER_INTERFACE, "PairableTimeout")
+        return self._prop("PairableTimeout")
 
     def set_pairable_timeout(self, value):
         """Sets the timeout time (in seconds) for the pairable property.
@@ -580,8 +662,7 @@ class BlueZ:
         :type value: int
         """
 
-        dbus_value = dbus.UInt32(value)
-        self.device.Set(ADAPTER_INTERFACE, "PairableTimeout", dbus_value)
+        self._set_prop("PairableTimeout", value)
 
     @property
     def discoverable(self):
@@ -591,7 +672,7 @@ class BlueZ:
         :rtype: boolean
         """
 
-        return bool(self.device.Get(ADAPTER_INTERFACE, "Discoverable"))
+        return bool(self._prop("Discoverable"))
 
     def set_discoverable(self, value):
         """Sets the discoverable boolean status of the Bluetooth adapter.
@@ -601,8 +682,7 @@ class BlueZ:
         :type value: boolean
         """
 
-        dbus_value = dbus.Boolean(value)
-        self.device.Set(ADAPTER_INTERFACE, "Discoverable", dbus_value)
+        self._set_prop("Discoverable", value)
 
     @property
     def discoverable_timeout(self):
@@ -613,7 +693,7 @@ class BlueZ:
         :rtype: int
         """
 
-        return self.device.Get(ADAPTER_INTERFACE, "DiscoverableTimeout")
+        return self._prop("DiscoverableTimeout")
 
     def set_discoverable_timeout(self, value):
         """Sets the discoverable time (in seconds) for the discoverable
@@ -624,8 +704,7 @@ class BlueZ:
         :type value: int
         """
 
-        dbus_value = dbus.UInt32(value)
-        self.device.Set(ADAPTER_INTERFACE, "DiscoverableTimeout", dbus_value)
+        self._set_prop("DiscoverableTimeout", value)
 
     @property
     def device_class(self):
@@ -686,7 +765,7 @@ class BlueZ:
         :rtype: boolean
         """
 
-        return bool(self.device.Get(ADAPTER_INTERFACE, "Powered"))
+        return bool(self._prop("Powered"))
 
     def set_powered(self, value):
         """Switches the adapter on or off.
@@ -695,8 +774,7 @@ class BlueZ:
         :type value: boolean
         """
 
-        dbus_value = dbus.Boolean(value)
-        self.device.Set(ADAPTER_INTERFACE, "Powered", dbus_value)
+        self._set_prop("Powered", value)
 
     def register_profile(self, profile_path, uuid, opts):
         """Registers an SDP record on the BlueZ SDP server.
@@ -728,7 +806,25 @@ class BlueZ:
         :type opts: dict
         """
 
-        return self.profile_manager.RegisterProfile(profile_path, uuid, opts)
+        async def _do():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            # Wrap dict values in Variant objects for a{sv}
+            variant_opts = {
+                k: Variant("b", v) if isinstance(v, bool) else Variant("s", v)
+                for k, v in opts.items()
+            }
+            reply = await _call_method(
+                bus,
+                BLUEZ_OBJECT_PATH,
+                PROFILEMANAGER_INTERFACE,
+                "RegisterProfile",
+                "osa{sv}",
+                [profile_path, uuid, variant_opts],
+            )
+            bus.disconnect()
+            return reply
+
+        return _run_async(_do())
 
     def unregister_profile(self, profile):
         """Unregisters a given SDP record from the BlueZ SDP server.
@@ -737,7 +833,19 @@ class BlueZ:
         :type profile: Profile
         """
 
-        self.profile_manager.UnregisterProfile(profile)
+        async def _do():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            await _call_method(
+                bus,
+                BLUEZ_OBJECT_PATH,
+                PROFILEMANAGER_INTERFACE,
+                "UnregisterProfile",
+                "o",
+                [profile],
+            )
+            bus.disconnect()
+
+        _run_async(_do())
 
     def reset(self):
         """Restarts the Bluetooth Service
@@ -752,15 +860,6 @@ class BlueZ:
         cmd_err = result.stderr.decode("utf-8").replace("\n", "")
         if cmd_err != "":
             raise Exception(cmd_err)
-
-        self.device = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, self.device_path),
-            "org.freedesktop.DBus.Properties",
-        )
-        self.profile_manager = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, BLUEZ_OBJECT_PATH),
-            PROFILEMANAGER_INTERFACE,
-        )
 
     def get_discovered_devices(self):
         """Gets a dict of all discovered (or previously discovered
@@ -779,17 +878,18 @@ class BlueZ:
         :rtype: dictionary
         """
 
-        bluez_objects = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, "/"), "org.freedesktop.DBus.ObjectManager"
-        )
+        async def _get():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            objects = await _get_managed_objects(bus)
+            bus.disconnect()
 
-        devices = {}
-        objects = bluez_objects.GetManagedObjects()
-        for path, interfaces in list(objects.items()):
-            if DEVICE_INTERFACE in interfaces:
-                devices[str(path)] = interfaces[DEVICE_INTERFACE]
+            devices = {}
+            for path, interfaces in list(objects.items()):
+                if DEVICE_INTERFACE in interfaces:
+                    devices[str(path)] = interfaces[DEVICE_INTERFACE]
+            return devices
 
-        return devices
+        return _run_async(_get())
 
     def discover_devices(self, alias=None, timeout=10, callback=None):
         """Runs a device discovery of the timeout length (in seconds)
@@ -830,7 +930,7 @@ class BlueZ:
         # Start discovering new devices and loop
         self.set_powered(True)
         self.set_pairable(True)
-        self.adapter.StartDiscovery()
+        self._call_adapter("StartDiscovery")
         try:
             for i in range(0, timeout):
                 time.sleep(1)
@@ -843,7 +943,7 @@ class BlueZ:
                 if callback:
                     callback(devices)
         finally:
-            self.adapter.StopDiscovery()
+            self._call_adapter("StopDiscovery")
             time.sleep(1)
 
         # Filter out paired devices or devices that don't
@@ -873,19 +973,24 @@ class BlueZ:
         :type device_path: string
         """
 
-        device = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, device_path), DEVICE_INTERFACE
-        )
-        device.Pair()
+        async def _do():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            await _call_method(bus, device_path, DEVICE_INTERFACE, "Pair")
+            bus.disconnect()
+
+        _run_async(_do())
 
     def connect_device(self, device_path):
-        device = dbus.Interface(
-            self.bus.get_object(SERVICE_NAME, device_path), DEVICE_INTERFACE
-        )
-        try:
-            device.Connect()
-        except dbus.exceptions.DBusException as e:
-            self.logger.exception(e)
+        async def _connect():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            try:
+                await _call_method(bus, device_path, DEVICE_INTERFACE, "Connect")
+            except Exception as e:
+                self.logger.exception(e)
+            finally:
+                bus.disconnect()
+
+        _run_async(_connect())
 
     def remove_device(self, path):
         """Removes a device that's been either discovered, paired,
@@ -895,7 +1000,7 @@ class BlueZ:
         :type path: string
         """
 
-        self.adapter.RemoveDevice(self.bus.get_object(SERVICE_NAME, path))
+        self._call_adapter("RemoveDevice", "o", [path])
 
     def find_device_by_address(self, address):
         """Finds the D-Bus path to a device that contains the
@@ -907,22 +1012,24 @@ class BlueZ:
         :rtype: string or None
         """
 
-        # Find all connected/paired/discovered devices
-        devices = find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
-        for path in devices:
-            # Get the device's address and paired status
-            device_props = dbus.Interface(
-                self.bus.get_object(SERVICE_NAME, path),
-                "org.freedesktop.DBus.Properties",
-            )
-            device_addr = device_props.Get(DEVICE_INTERFACE, "Address").upper()
+        async def _find():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            objects = await _get_managed_objects(bus)
 
-            # Check for an address match
-            if device_addr != address.upper():
-                continue
-            return path
+            for path, ifaces in objects.items():
+                if DEVICE_INTERFACE not in ifaces:
+                    continue
+                device_addr = (
+                    await _get_property(bus, path, DEVICE_INTERFACE, "Address")
+                ).upper()
 
-        return None
+                if device_addr == address.upper():
+                    bus.disconnect()
+                    return path
+            bus.disconnect()
+            return None
+
+        return _run_async(_find())
 
     def find_connected_devices(self, alias_filter=False):
         """Finds the D-Bus path to a device that contains the
@@ -934,21 +1041,28 @@ class BlueZ:
         :rtype: string or None
         """
 
-        devices = find_objects(self.bus, SERVICE_NAME, DEVICE_INTERFACE)
-        conn_devices = []
-        for path in devices:
-            # Get the device's connection status
-            device_props = dbus.Interface(
-                self.bus.get_object(SERVICE_NAME, path),
-                "org.freedesktop.DBus.Properties",
-            )
-            device_conn_status = device_props.Get(DEVICE_INTERFACE, "Connected")
-            device_alias = device_props.Get(DEVICE_INTERFACE, "Alias").upper()
+        async def _find():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            objects = await _get_managed_objects(bus)
 
-            if device_conn_status:
-                if alias_filter and device_alias == alias_filter.upper():
-                    conn_devices.append(path)
-                else:
-                    conn_devices.append(path)
+            conn_devices = []
+            for path, ifaces in objects.items():
+                if DEVICE_INTERFACE not in ifaces:
+                    continue
+                device_conn_status = await _get_property(
+                    bus, path, DEVICE_INTERFACE, "Connected"
+                )
+                device_alias = (
+                    await _get_property(bus, path, DEVICE_INTERFACE, "Alias")
+                ).upper()
 
-        return conn_devices
+                if device_conn_status:
+                    if alias_filter and device_alias == alias_filter.upper():
+                        conn_devices.append(path)
+                    else:
+                        conn_devices.append(path)
+
+            bus.disconnect()
+            return conn_devices
+
+        return _run_async(_find())

@@ -1,16 +1,13 @@
 """
 A quick script to test aspects of the BlueZ API.
 """
-import dbus
 
 from nxbt import BlueZ, find_objects, SERVICE_NAME, ADAPTER_INTERFACE
 
-
-bus = dbus.SystemBus()
-adapters = find_objects(bus, SERVICE_NAME, ADAPTER_INTERFACE)
+adapters = find_objects(SERVICE_NAME, ADAPTER_INTERFACE)
 print(adapters)
 
-bt = BlueZ(device_id=adapters[0].split("/")[-1])
+bt = BlueZ()
 
 # jc_MAC = "XX:XX:XX:XX:XX:XX"
 # res = bt.discover_devices(alias="Joy-Con (L)", timeout=10)
