@@ -1,13 +1,19 @@
+import asyncio
 import subprocess
 import re
 import os
 import time
 import logging
+import threading
 from shutil import which
 import random
 from pathlib import Path
 
 import dbus
+from dbus_fast import BusType, Message
+from dbus_fast.aio.message_bus import MessageBus
+
+AGENT_PATH = "/nxbt/agent"
 
 
 SERVICE_NAME = "org.bluez"
@@ -528,6 +534,33 @@ class BlueZ:
 
         dbus_value = dbus.Boolean(value)
         self.device.Set(ADAPTER_INTERFACE, "Pairable", dbus_value)
+
+    def setup_auto_accept_pairing(self):
+        """Registers a NoInputNoOutput agent via dbus_fast to auto-accept
+        all incoming pairing requests without user interaction.
+        """
+
+        if getattr(self, "_agent_thread", None) is not None:
+            return  # already running
+
+        async def _run_agent():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            msg = Message(
+                destination=SERVICE_NAME,
+                path=BLUEZ_OBJECT_PATH,
+                interface=f"{SERVICE_NAME}.AgentManager1",
+                member="RegisterAgent",
+                signature="os",
+                body=[AGENT_PATH, "NoInputNoOutput"],
+            )
+            await bus.call(msg)
+            await asyncio.Event().wait()  # keep agent alive forever
+
+        self._agent_thread = threading.Thread(
+            target=lambda: asyncio.run(_run_agent()), daemon=True, name="nxbt-bt-agent"
+        )
+        self._agent_thread.start()
+        self.logger.debug("Auto-accept agent registered")
 
     @property
     def pairable_timeout(self):

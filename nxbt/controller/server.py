@@ -380,6 +380,7 @@ class ControllerServer:
                 s_itr.listen(1)
                 s_ctrl.listen(1)
 
+                self.bt.setup_auto_accept_pairing()
                 self.bt.set_discoverable(True)
 
                 # WARNING:
