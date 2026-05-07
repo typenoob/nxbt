@@ -2,13 +2,13 @@ name: Docker Image CI
 
 on:
   push:
-    branches: ["master"]
+    branches: ["main"]
     paths-ignore:
       - "README.md"
       - ".github/**"
       - "CHANGELOG.md"
   pull_request:
-    branches: ["master"]
+    branches: ["main"]
   workflow_dispatch:
 env:
   VERSION: 0.2
