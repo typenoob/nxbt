@@ -10,7 +10,14 @@ from .bluez import find_devices_by_alias
 from .tui import InputTUI
 
 
-parser = argparse.ArgumentParser()
+parser = argparse.ArgumentParser(
+    description="Control your Nintendo Switch through a website, terminal, or macro."
+)
+parser.add_argument(
+    "--version",
+    action="version",
+    version="%(prog)s 0.1.0",
+)
 parser.add_argument(
     "command",
     default=False,
@@ -69,9 +76,10 @@ parser.add_argument(
     "--logfile",
     required=False,
     default=False,
-    action="store_true",
+    nargs="?",
+    const=True,
     help="""Enables logging to a file in the current working directory
-                    instead of stderr.""",
+                    instead of stderr. Optionally specify a filename.""",
 )
 parser.add_argument(
     "-i",
@@ -105,7 +113,13 @@ parser.add_argument(
                     in the webapp. Certificates in this folder should be in the form of
                     a 'cert.pem' and 'key.pem' pair.""",
 )
-args = parser.parse_args()
+parser.add_argument(
+    "--timeout",
+    required=False,
+    default=120,
+    type=int,
+    help="""Specifies the connection timeout in seconds for the test command.""",
+)
 
 
 MACRO = """
@@ -181,7 +195,7 @@ def check_bluetooth_address(address):
         raise ValueError("Invalid Bluetooth address")
 
 
-def get_reconnect_target():
+def get_reconnect_target(args):
     if args.reconnect:
         reconnect_target = find_devices_by_alias("Nintendo Switch")
     elif args.address:
@@ -193,13 +207,13 @@ def get_reconnect_target():
     return reconnect_target
 
 
-def demo():
+def demo(args):
     """Loops over all available Bluetooth adapters
     and creates controllers on each. The last available adapter
     is used to run a macro.
     """
 
-    nx = Nxbt(debug=args.debug, log_to_file=args.logfile)
+    nx = Nxbt(debug=args.debug, log_to_file=bool(args.logfile))
     adapters = nx.get_available_adapters()
     if len(adapters) < 1:
         raise OSError("Unable to detect any Bluetooth adapters.")
@@ -228,13 +242,13 @@ def demo():
     print("Finished!")
 
 
-def test():
+def test(args):
     """Tests NXBT functionality"""
     # Init
     print("[1] Attempting to initialize NXBT...")
     nx = None
     try:
-        nx = Nxbt(debug=args.debug, log_to_file=args.logfile)
+        nx = Nxbt(debug=args.debug, log_to_file=bool(args.logfile))
     except Exception as e:
         print("Failed to initialize:")
         print(traceback.format_exc())
@@ -280,7 +294,7 @@ def test():
 
     # Controller connection check
     print("[4] Waiting for controller to connect with the Switch...")
-    timeout = 120
+    timeout = args.timeout
     print(f"Connection timeout is {timeout} seconds for this test script.")
     elapsed = 0
     while nx.state[cindex]["state"] != "connected":
@@ -308,7 +322,7 @@ def test():
     print("All tests passed.")
 
 
-def macro():
+def macro(args):
     """Runs a macro from the command line.
     The macro can be from a specified file, a command line string,
     or input from the user in an interactive process.
@@ -327,9 +341,9 @@ def macro():
         print("to load a macro string from.")
         return
 
-    reconnect_target = get_reconnect_target()
+    reconnect_target = get_reconnect_target(args)
 
-    nx = Nxbt(debug=args.debug, log_to_file=args.logfile)
+    nx = Nxbt(debug=args.debug, log_to_file=bool(args.logfile))
     print("Creating controller...")
     index = nx.create_controller(
         PRO_CONTROLLER,
@@ -370,26 +384,30 @@ def list_switch_addresses():
     print("---------------------------")
 
 
-def main():
+def main(args=None):
+    args = parser.parse_args(args)
     if args.command == "webapp":
         from .web import start_web_app
 
         start_web_app(
-            ip=args.ip, port=args.port, usessl=args.usessl, cert_path=args.certpath
+            ip=args.ip,
+            port=args.port,
+            usessl=args.usessl,
+            cert_path=args.certpath,
         )
     elif args.command == "demo":
-        demo()
+        demo(args)
     elif args.command == "macro":
-        macro()
+        macro(args)
     elif args.command == "tui":
-        reconnect_target = get_reconnect_target()
+        reconnect_target = get_reconnect_target(args)
         tui = InputTUI(reconnect_target=reconnect_target)
         tui.start()
     elif args.command == "remote_tui":
-        reconnect_target = get_reconnect_target()
+        reconnect_target = get_reconnect_target(args)
         tui = InputTUI(reconnect_target=reconnect_target, force_remote=True)
         tui.start()
     elif args.command == "addresses":
         list_switch_addresses()
     elif args.command == "test":
-        test()
+        test(args)
