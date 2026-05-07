@@ -274,7 +274,7 @@ nx.tilt_stick(controller_idx, Sticks.RIGHT_STICK, -100, 0, tilted=1.0)
 ```python
 # This prints the device paths for each available adapter.
 # If a controller is in use, an adapter will be removed from this list.
-print(nx.get_available_adapters)
+print(nx.get_available_adapters())
 ```
 
 **Shutting Down a running Controller**
