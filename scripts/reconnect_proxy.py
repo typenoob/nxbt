@@ -22,9 +22,9 @@ from nxbt import Controller
 from nxbt import JOYCON_L, JOYCON_R, PRO_CONTROLLER
 
 
-JCL_REPLY02 = b'\xA2\x21\x05\x8E\x84\x00\x12\x01\x18\x80\x01\x18\x80\x80\x82\x02\x03\x48\x01\x02\xDC\xA6\x32\x16\x4A\x7C\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-PRO_REPLY02 = b'\xA2\x21\x1A\x40\x00\x00\x00\x02\x20\x00\x01\x00\x00\x00\x82\x02\x03\x48\x03\x02\xDC\xA6\x32\x16\x4A\x7C\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
-JCR_REPLY02 = b'\xA2\x21\x05\x8E\x84\x00\x12\x01\x18\x80\x01\x18\x80\x80\x82\x02\x03\x48\x02\x02\xDC\xA6\x32\x16\x4A\x7C\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+JCL_REPLY02 = b"\xa2\x21\x05\x8e\x84\x00\x12\x01\x18\x80\x01\x18\x80\x80\x82\x02\x03\x48\x01\x02\xdc\xa6\x32\x16\x4a\x7c\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+PRO_REPLY02 = b"\xa2\x21\x1a\x40\x00\x00\x00\x02\x20\x00\x01\x00\x00\x00\x82\x02\x03\x48\x03\x02\xdc\xa6\x32\x16\x4a\x7c\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+JCR_REPLY02 = b"\xa2\x21\x05\x8e\x84\x00\x12\x01\x18\x80\x01\x18\x80\x80\x82\x02\x03\x48\x02\x02\xdc\xa6\x32\x16\x4a\x7c\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
 
 def format_message(data, split, name):
@@ -53,9 +53,10 @@ def format_message(data, split, name):
             subcommand += "0x" + data_byte + " "
 
     formatted = (
-        f"--- {name} Msg ---\n" +
-        f"Payload:    {payload}\n" +
-        f"Subcommand: {subcommand}")
+        f"--- {name} Msg ---\n"
+        + f"Payload:    {payload}\n"
+        + f"Subcommand: {subcommand}"
+    )
 
     return formatted
 
@@ -81,7 +82,6 @@ def print_msg_switch(data):
 
 
 def write_to_buffer(buffer, message, message_type):
-
     formatted_message = None
     if message_type == "switch":
         formatted_message = format_message(message, 10, "Switch")
@@ -118,20 +118,28 @@ if __name__ == "__main__":
     controller = Controller(bt, controller_type)
 
     # Joy-Con Sockets
-    jc_ctrl = socket.socket(family=socket.AF_BLUETOOTH,
-                            type=socket.SOCK_SEQPACKET,
-                            proto=socket.BTPROTO_L2CAP)
-    jc_itr = socket.socket(family=socket.AF_BLUETOOTH,
-                           type=socket.SOCK_SEQPACKET,
-                           proto=socket.BTPROTO_L2CAP)
+    jc_ctrl = socket.socket(
+        family=socket.AF_BLUETOOTH,
+        type=socket.SOCK_SEQPACKET,
+        proto=socket.BTPROTO_L2CAP,
+    )
+    jc_itr = socket.socket(
+        family=socket.AF_BLUETOOTH,
+        type=socket.SOCK_SEQPACKET,
+        proto=socket.BTPROTO_L2CAP,
+    )
 
     # Switch sockets
-    switch_itr = socket.socket(family=socket.AF_BLUETOOTH,
-                               type=socket.SOCK_SEQPACKET,
-                               proto=socket.BTPROTO_L2CAP)
-    switch_ctrl = socket.socket(family=socket.AF_BLUETOOTH,
-                                type=socket.SOCK_SEQPACKET,
-                                proto=socket.BTPROTO_L2CAP)
+    switch_itr = socket.socket(
+        family=socket.AF_BLUETOOTH,
+        type=socket.SOCK_SEQPACKET,
+        proto=socket.BTPROTO_L2CAP,
+    )
+    switch_ctrl = socket.socket(
+        family=socket.AF_BLUETOOTH,
+        type=socket.SOCK_SEQPACKET,
+        proto=socket.BTPROTO_L2CAP,
+    )
 
     try:
         switch_ctrl.bind((bt.address, port_ctrl))
@@ -167,10 +175,7 @@ if __name__ == "__main__":
         jc_data = jc_client_itr.recv(350)
         print("Got initial Joy-Con Empty Report")
         # print_msg_controller(jc_data)
-        write_to_buffer(
-                    message_buffer,
-                    "Joy-Con Empty Report",
-                    "comment")
+        write_to_buffer(message_buffer, "Joy-Con Empty Report", "comment")
         write_to_buffer(message_buffer, jc_data, "controller")
         print(message_buffer)
 
@@ -183,10 +188,7 @@ if __name__ == "__main__":
         # Get the Switch's reply and send it to the Joy-Con
         reply = client_interrupt.recv(350)
         # print_msg_switch(reply)
-        write_to_buffer(
-                    message_buffer,
-                    "Switch Input Report Reply",
-                    "comment")
+        write_to_buffer(message_buffer, "Switch Input Report Reply", "comment")
         write_to_buffer(message_buffer, reply, "switch")
         jc_client_itr.sendall(reply)
 
@@ -208,19 +210,13 @@ if __name__ == "__main__":
                 print("Got Device Info")
                 # print_msg_controller(jc_data)
                 print("Joy-Con Device Info Reply Length", len(jc_data))
-                write_to_buffer(
-                    message_buffer,
-                    "Joy-Con Device Info",
-                    "comment")
+                write_to_buffer(message_buffer, "Joy-Con Device Info", "comment")
                 write_to_buffer(message_buffer, jc_data, "controller")
                 break
 
         # Main loop
         print("Entering main proxy loop")
-        write_to_buffer(
-                    message_buffer,
-                    "Entering Main Loop",
-                    "comment")
+        write_to_buffer(message_buffer, "Entering Main Loop", "comment")
         time_old = perf_counter()
         timer_old = 0
         timer_counter = 0
@@ -252,7 +248,7 @@ if __name__ == "__main__":
             except BlockingIOError:
                 continue
 
-            time.sleep(1/2)
+            time.sleep(1 / 2)
 
     except KeyboardInterrupt:
         print("Closing sockets")

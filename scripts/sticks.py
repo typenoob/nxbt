@@ -64,19 +64,15 @@ print("Relative X/Y Values", ratio_x, ratio_y)
 print("\nExample Left Stick Ratio to Data Conversion:")
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 if ratio_x < 0:
-    data_x_converted = (
-        abs(ratio_x) * (left_x_min - left_center_x) + left_center_x)
+    data_x_converted = abs(ratio_x) * (left_x_min - left_center_x) + left_center_x
 else:
-    data_x_converted = (
-        abs(ratio_x) * (left_x_max - left_center_x) + left_center_x)
+    data_x_converted = abs(ratio_x) * (left_x_max - left_center_x) + left_center_x
 data_x_converted = int(round(data_x_converted))
 
 if ratio_y < 0:
-    data_y_converted = (
-        abs(ratio_y) * (left_y_min - left_center_y) + left_center_y)
+    data_y_converted = abs(ratio_y) * (left_y_min - left_center_y) + left_center_y
 else:
-    data_y_converted = (
-        abs(ratio_y) * (left_y_max - left_center_y) + left_center_y)
+    data_y_converted = abs(ratio_y) * (left_y_max - left_center_y) + left_center_y
 data_y_converted = int(round(data_y_converted))
 print("X/Y Converted Values:", data_x_converted, data_y_converted)
 
@@ -88,5 +84,6 @@ converted_values = [
     # of the X uint16
     hex(((data_y_converted & 0xF) << 4) + (data_x_converted >> 8)),
     # Get the first two digits of the Y uint16
-    hex(data_y_converted >> 4)]
+    hex(data_y_converted >> 4),
+]
 print("Uint8 Converted Values:", converted_values)

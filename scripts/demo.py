@@ -49,7 +49,6 @@ A 0.1s
 
 
 def random_colour():
-
     return [
         randint(0, 255),
         randint(0, 255),
@@ -58,7 +57,6 @@ def random_colour():
 
 
 if __name__ == "__main__":
-
     # Init NXBT
     nx = nxbt.Nxbt()
 
@@ -74,7 +72,8 @@ if __name__ == "__main__":
             nxbt.PRO_CONTROLLER,
             adapter_path=adapters[i],
             colour_body=random_colour(),
-            colour_buttons=random_colour())
+            colour_buttons=random_colour(),
+        )
         controller_idxs.append(index)
 
     # Select the last controller for input
@@ -94,14 +93,18 @@ if __name__ == "__main__":
     print("Stopped Macro")
 
     # Moving the selected home screen item two spaces to the right and back.
-    nx.tilt_stick(controller_idx, Sticks.RIGHT_STICK, 100, 0,
-                  tilted=0.25, released=0.25)
-    nx.tilt_stick(controller_idx, Sticks.RIGHT_STICK, 100, 0,
-                  tilted=0.25, released=0.25)
-    nx.tilt_stick(controller_idx, Sticks.RIGHT_STICK, -100, 0,
-                  tilted=0.25, released=0.25)
-    nx.tilt_stick(controller_idx, Sticks.RIGHT_STICK, -100, 0,
-                  tilted=0.25, released=0.25)
+    nx.tilt_stick(
+        controller_idx, Sticks.RIGHT_STICK, 100, 0, tilted=0.25, released=0.25
+    )
+    nx.tilt_stick(
+        controller_idx, Sticks.RIGHT_STICK, 100, 0, tilted=0.25, released=0.25
+    )
+    nx.tilt_stick(
+        controller_idx, Sticks.RIGHT_STICK, -100, 0, tilted=0.25, released=0.25
+    )
+    nx.tilt_stick(
+        controller_idx, Sticks.RIGHT_STICK, -100, 0, tilted=0.25, released=0.25
+    )
 
     # Return to the "Change Grip/Order Screen"
     nx.press_buttons(controller_idx, [Buttons.A])

@@ -61,7 +61,6 @@ A 0.1s
 
 
 def random_colour():
-
     return [
         randint(0, 255),
         randint(0, 255),
@@ -86,7 +85,8 @@ def demo():
             PRO_CONTROLLER,
             adapters[i],
             colour_body=random_colour(),
-            colour_buttons=random_colour())
+            colour_buttons=random_colour(),
+        )
         controller_idxs.append(index)
 
     # Run a macro on the last controller
@@ -95,13 +95,14 @@ def demo():
         macro_id = nx.macro(controller_idxs[-1], MACRO, block=False)
         while macro_id not in nx.state[controller_idxs[-1]]["finished_macros"]:
             state = nx.state[controller_idxs[-1]]
-            if state['state'] == 'crashed':
+            if state["state"] == "crashed":
                 print("An error occurred while running the demo:")
-                print(state['errors'])
+                print(state["errors"])
                 exit(1)
             sleep(1.0)
 
     print("Finished!")
+
 
 if __name__ == "__main__":
     demo()
