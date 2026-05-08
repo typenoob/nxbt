@@ -153,3 +153,6 @@ release
 
 # Ruff
 .ruff_cache
+
+# AI
+.claude
