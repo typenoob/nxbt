@@ -636,6 +636,15 @@ class BlueZ:
                 body=[AGENT_PATH, "NoInputNoOutput"],
             )
             await bus.call(msg)
+            msg = Message(
+                destination=SERVICE_NAME,
+                path=BLUEZ_OBJECT_PATH,
+                interface=f"{SERVICE_NAME}.AgentManager1",
+                member="RequestDefaultAgent",
+                signature="o",
+                body=[AGENT_PATH],
+            )
+            await bus.call(msg)
             await asyncio.Event().wait()  # keep agent alive forever
 
         self._agent_thread = threading.Thread(
