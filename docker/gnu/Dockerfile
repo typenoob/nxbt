@@ -1,10 +1,22 @@
-FROM debian:oldoldstable-slim
+
+FROM ghcr.io/astral-sh/uv:debian-slim
+
 RUN mkdir nxbt
 WORKDIR /nxbt
 COPY . .
-RUN apt update \
-    && apt install -y wget python3 python3-dev python3-pip libssl-dev libdbus-glib-1-dev libdbus-1-dev patchelf procps
-RUN wget -qO- https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:$PATH"
-RUN uv run --no-managed-python nuitka nxbt
-RUN ln -s /nxbt/release/nxbt /bin/nxbt
+
+# Use mirror for faster download in China; disable SSL verification for mirrors with cert issues
+RUN sed -i 's|http://deb.debian.org/|https://mirrors.ustc.edu.cn/|g' /etc/apt/sources.list.d/debian.sources
+
+RUN echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99-no-ssl-verify
+RUN apt update
+
+# # Install Make
+RUN apt install -y make
+
+# # Install Python
+RUN apt install -y python3
+
+RUN make && make install
+
+ENTRYPOINT ["/bin/nxbt"]
