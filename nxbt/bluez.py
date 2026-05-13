@@ -1040,6 +1040,38 @@ class BlueZ:
 
         return _run_async(_find())
 
+    def find_bonded_devices_by_alias(self, alias=None):
+        """Finds bonded (paired) devices, optionally filtered by alias.
+
+        :param alias: Device alias to filter by, defaults to None (all bonded)
+        :type alias: string, optional
+        :return: List of D-Bus paths to bonded devices
+        :rtype: list
+        """
+
+        async def _find():
+            bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            objects = await _get_managed_objects(bus)
+
+            result = []
+            for path, ifaces in objects.items():
+                if DEVICE_INTERFACE not in ifaces:
+                    continue
+                if not await _get_property(bus, path, DEVICE_INTERFACE, "Paired"):
+                    continue
+                if alias:
+                    device_alias = (
+                        await _get_property(bus, path, DEVICE_INTERFACE, "Alias")
+                    ).upper()
+                    if device_alias != alias.upper():
+                        continue
+                result.append(path)
+
+            bus.disconnect()
+            return result
+
+        return _run_async(_find())
+
     def find_connected_devices(self, alias_filter=False):
         """Finds the D-Bus path to a device that contains the
         specified address.

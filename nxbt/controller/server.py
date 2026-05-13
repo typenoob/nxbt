@@ -311,36 +311,47 @@ class ControllerServer:
         return itr, ctrl
 
     def connection_reset_watchdog(self):
-        connected_devices = []
-        connected_devices_count = {}
+        """Background watchdog that removes bonded devices exhibiting rapid
+        connect-disconnect cycles (connection flapping).
+
+        When a user forcibly pairs a device that is already bonded, BlueZ can
+        enter a state where the device repeatedly connects and immediately drops.
+        Detecting 2+ disconnect cycles for a bonded device and removing it clears
+        the stale bond, allowing a clean re-pair.
+        """
+
+        bonded = set(self.bt.find_bonded_devices_by_alias("Nintendo Switch"))
+        if not bonded:
+            self.logger.debug("No bonded devices found, watchdog idle")
+            return
+
+        # Track currently connected devices and flap count per path
+        connected = set()
+        flap_count = {}
         while self._crw_running:
-            paths = self.bt.find_connected_devices(alias_filter="Nintendo Switch")
-            # Keep track of Switches that connect
-            if len(paths) > 0:
-                connected_devices = list(set(connected_devices + paths))
+            paths = set(self.bt.find_connected_devices())
 
-            # Increment a counter if a Switch connected and disconnected
-            disconnected = list(set(connected_devices) - set(paths))
-            if len(disconnected) > 0:
-                for path in disconnected:
-                    if path not in connected_devices_count.keys():
-                        connected_devices_count[path] = 1
-                    else:
-                        connected_devices_count[path] += 1
-                connected_devices = list(set(connected_devices) - set(disconnected))
+            newly_connected = paths - connected
+            newly_disconnected = connected - paths
 
-            # Delete Switches that connect/disconnect twice.
-            # This behaviour is characteristic of connection issues and is corrected
-            # by removing the Switch's connection to the system.
-            if len(connected_devices_count.keys()) > 0:
-                for key in connected_devices_count.keys():
-                    if connected_devices_count[key] >= 2:
+            # Count disconnect events for bonded devices
+            for path in newly_disconnected:
+                if path in bonded:
+                    flap_count[path] = flap_count.get(path, 0) + 1
+                    # Two or more flaps indicate a stuck connection — remove the bond
+                    if flap_count[path] >= 2:
                         self.logger.debug(
-                            "A Nintendo Switch disconnected. Resetting Connection..."
+                            "A bonded device flap-detected. Resetting connection..."
                         )
-                        self.logger.debug(f"Removing {str(key)}")
-                        self.bt.remove_device(key)
-                        connected_devices_count[key] = 0
+                        self.logger.debug(f"Removing {path}")
+                        self.bt.remove_device(path)
+                        flap_count[path] = 0
+
+            # Update connected set: add new, remove dropped
+            for path in newly_connected:
+                if path in bonded:
+                    connected.add(path)
+            connected -= newly_disconnected
 
             time.sleep(0.1)
 
