@@ -1,4 +1,3 @@
-import socket
 import fcntl
 import os
 import time
@@ -6,11 +5,10 @@ import queue
 import logging
 import traceback
 import atexit
-from threading import Thread
 import statistics as stat
 
-from .controller import Controller, ControllerTypes
-from ..bluez import BlueZ, find_devices_by_alias
+from .controller import ControllerTypes
+from ..backends import BlueZBackend
 from .protocol import ControllerProtocol
 from .input import InputParser
 from .utils import format_msg_controller, format_msg_switch
@@ -26,6 +24,7 @@ class ControllerServer:
         lock=None,
         colour_body=None,
         colour_buttons=None,
+        backend=None,
     ):
         self.logger = logging.getLogger("nxbt")
         # Cache logging level to increase performance on checks
@@ -55,12 +54,12 @@ class ControllerServer:
         self.reconnect_counter = 0
 
         # Intializing Bluetooth
-        self.bt = BlueZ(adapter_path=adapter_path)
+        self.backend = backend if backend is not None else BlueZBackend(adapter_path=adapter_path)
+        self.bt = self.backend._bt
 
-        self.controller = Controller(self.bt, self.controller_type)
         self.protocol = ControllerProtocol(
             self.controller_type,
-            self.bt.address,
+            self.backend.address,
             colour_body=self.colour_body,
             colour_buttons=self.colour_buttons,
         )
@@ -91,15 +90,15 @@ class ControllerServer:
             if self.lock:
                 self.lock.acquire()
             try:
-                self.controller.setup()
+                self.backend.setup(self.controller_type)
 
                 if reconnect_address:
                     try:
                         itr, ctrl = self.reconnect(reconnect_address)
                     except OSError:
-                        itr, ctrl = self.connect()
+                        itr, ctrl = self.pair()
                 else:
-                    itr, ctrl = self.connect()
+                    itr, ctrl = self.pair()
             finally:
                 if self.lock:
                     self.lock.release()
@@ -197,14 +196,50 @@ class ControllerServer:
 
                 self.logger.debug(f"Tick: {self.tick}, Mean Time: {str(1 / mean_time)}")
 
-    def save_connection(self, error, state=None):
+    def _run_pairing_handshake(self, itr):
+        received_first_message = False
+        while True:
+            try:
+                reply = itr.recv(50)
+                if self.logger_level <= logging.DEBUG and len(reply) > 40:
+                    self.logger.debug(format_msg_switch(reply))
+            except BlockingIOError:
+                reply = None
+
+            if reply:
+                received_first_message = True
+
+            self.protocol.process_commands(reply)
+            msg = self.protocol.get_report()
+
+            if self.logger_level <= logging.DEBUG and reply:
+                self.logger.debug(format_msg_controller(msg))
+
+            try:
+                itr.sendall(msg)
+            except BlockingIOError:
+                continue
+
+            if (
+                reply
+                and len(reply) > 45
+                and self.protocol.vibration_enabled
+                and self.protocol.player_number
+            ):
+                break
+
+            if not received_first_message:
+                time.sleep(1)
+            else:
+                time.sleep(1 / 15)
+
+    def save_connection(self, error, state=None):  # state kept for API compat
         while self.reconnect_counter < 2:
             try:
                 self.logger.debug("Attempting to reconnect")
-                # Reinitialize the protocol
                 self.protocol = ControllerProtocol(
                     self.controller_type,
-                    self.bt.address,
+                    self.backend.address,
                     colour_body=self.colour_body,
                     colour_buttons=self.colour_buttons,
                 )
@@ -213,48 +248,7 @@ class ControllerServer:
                     self.lock.acquire()
                 try:
                     itr, ctrl = self.reconnect(self.switch_address)
-
-                    received_first_message = False
-                    while True:
-                        # Attempt to get output from Switch
-                        try:
-                            reply = itr.recv(50)
-                            if self.logger_level <= logging.DEBUG and len(reply) > 40:
-                                self.logger.debug(format_msg_switch(reply))
-                        except BlockingIOError:
-                            reply = None
-
-                        if reply:
-                            received_first_message = True
-
-                        self.protocol.process_commands(reply)
-                        msg = self.protocol.get_report()
-
-                        if self.logger_level <= logging.DEBUG and reply:
-                            self.logger.debug(format_msg_controller(msg))
-
-                        try:
-                            itr.sendall(msg)
-                        except BlockingIOError:
-                            continue
-
-                        # Exit pairing loop when player lights have been set and
-                        # vibration has been enabled
-                        if (
-                            reply
-                            and len(reply) > 45
-                            and self.protocol.vibration_enabled
-                            and self.protocol.player_number
-                        ):
-                            break
-
-                        # Switch responds to packets slower during pairing
-                        # Pairing cycle responds optimally on a 15Hz loop
-                        if not received_first_message:
-                            time.sleep(1)
-                        else:
-                            time.sleep(1 / 15)
-
+                    self._run_pairing_handshake(itr)
                     self.state["state"] = "connected"
                     return itr, ctrl
                 finally:
@@ -265,26 +259,18 @@ class ControllerServer:
                 self.logger.debug(error)
                 time.sleep(0.5)
 
-        # If we can't reconnect, transition to attempting
-        # to connect to any Switch.
         self.logger.debug("Connecting to any Switch")
         self.reconnect_counter = 0
-
-        # Reinitialize initial communication overload protections
         self.tick = 1
 
-        # Reinitialize the protocol
         self.protocol = ControllerProtocol(
             self.controller_type,
-            self.bt.address,
+            self.backend.address,
             colour_body=self.colour_body,
             colour_buttons=self.colour_buttons,
         )
         self.input.reassign_protocol(self.protocol)
 
-        # Since we were forced to attempt a reconnection
-        # we need to press the L/SL and R/SR buttons before
-        # we can proceed with any input.
         if self.controller_type == ControllerTypes.PRO_CONTROLLER:
             self.input.current_macro_commands = "L R 0.0s".strip(" ").split(" ")
         elif self.controller_type == ControllerTypes.JOYCON_L:
@@ -299,244 +285,44 @@ class ControllerServer:
         if self.lock:
             self.lock.acquire()
         try:
-            itr, ctrl = self.connect()
+            itr, ctrl = self.pair()
         finally:
             if self.lock:
                 self.lock.release()
 
         self.state["state"] = "connected"
-
         self.switch_address = itr.getsockname()[0]
 
         return itr, ctrl
 
-    def connection_reset_watchdog(self):
-        """Background watchdog that removes bonded devices exhibiting rapid
-        connect-disconnect cycles (connection flapping).
-
-        When a user forcibly pairs a device that is already bonded, BlueZ can
-        enter a state where the device repeatedly connects and immediately drops.
-        Detecting 2+ disconnect cycles for a bonded device and removing it clears
-        the stale bond, allowing a clean re-pair.
-        """
-
-        bonded = set(self.bt.find_bonded_devices_by_alias("Nintendo Switch"))
-        if not bonded:
-            self.logger.debug("No bonded devices found, watchdog idle")
-            return
-
-        # Track currently connected devices and flap count per path
-        connected = set()
-        flap_count = {}
-        while self._crw_running:
-            paths = set(self.bt.find_connected_devices())
-
-            newly_connected = paths - connected
-            newly_disconnected = connected - paths
-
-            # Count disconnect events for bonded devices
-            for path in newly_disconnected:
-                if path in bonded:
-                    flap_count[path] = flap_count.get(path, 0) + 1
-                    # Two or more flaps indicate a stuck connection — remove the bond
-                    if flap_count[path] >= 2:
-                        self.logger.debug(
-                            "A bonded device flap-detected. Resetting connection..."
-                        )
-                        self.logger.debug(f"Removing {path}")
-                        self.bt.remove_device(path)
-                        flap_count[path] = 0
-
-            # Update connected set: add new, remove dropped
-            for path in newly_connected:
-                if path in bonded:
-                    connected.add(path)
-            connected -= newly_disconnected
-
-            time.sleep(0.1)
-
-    def connect(self):
-        """Configures as a specified controller, pairs with a Nintendo Switch,
-        and creates/accepts sockets for communication with the Switch.
-        """
-
-        # The controller server will continue attempting to connect
-        # to any Nintendo Switch until the connection procedure fully
-        # succeeds. This prevents situations where the Switch will
-        # disconnect during a connection.
+    def pair(self):
+        """Listens for and pairs with an incoming Nintendo Switch connection."""
         while True:
             try:
                 self.state["state"] = "connecting"
-
-                # Creating control and interrupt sockets
-                s_ctrl = socket.socket(
-                    family=socket.AF_BLUETOOTH,
-                    type=socket.SOCK_SEQPACKET,
-                    proto=socket.BTPROTO_L2CAP,
-                )
-                s_itr = socket.socket(
-                    family=socket.AF_BLUETOOTH,
-                    type=socket.SOCK_SEQPACKET,
-                    proto=socket.BTPROTO_L2CAP,
-                )
-
-                # Setting up HID interrupt/control sockets
-                try:
-                    s_ctrl.bind((self.bt.address, 17))
-                    s_itr.bind((self.bt.address, 19))
-                except OSError:
-                    s_ctrl.bind((socket.BDADDR_ANY, 17))
-                    s_itr.bind((socket.BDADDR_ANY, 19))
-
-                s_itr.listen(1)
-                s_ctrl.listen(1)
-
-                self.bt.setup_auto_accept_pairing()
-                self.bt.set_discoverable(True)
-
-                # WARNING:
-                # A device's class must be set **AFTER** discoverability
-                # is set. If it is set before or in a similar timeframe,
-                # the class will be reset to the default value.
-                self.bt.set_class("0x02508")
-
-                self._crw_running = True
-                crw = Thread(target=self.connection_reset_watchdog)
-                crw.start()
-
-                itr, itr_address = s_itr.accept()
-                ctrl, ctrl_address = s_ctrl.accept()
-
-                self._crw_running = False
-
-                # Send an empty input report to the Switch to prompt a reply
+                itr, ctrl = self.backend.accept()
                 self.protocol.process_commands(None)
-                msg = self.protocol.get_report()
-                itr.sendall(msg)
-
-                # Setting interrupt connection as non-blocking.
-                # In this case, non-blocking means it throws a "BlockingIOError"
-                # for sending and receiving, instead of blocking.
+                itr.sendall(self.protocol.get_report())
                 fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
-
-                # Mainloop
-                received_first_message = False
-                while True:
-                    # Attempt to get output from Switch
-                    try:
-                        reply = itr.recv(50)
-                        if self.logger_level <= logging.DEBUG and len(reply) > 40:
-                            self.logger.debug(format_msg_switch(reply))
-                    except BlockingIOError:
-                        reply = None
-
-                    if reply:
-                        received_first_message = True
-
-                    self.protocol.process_commands(reply)
-                    msg = self.protocol.get_report()
-
-                    if self.logger_level <= logging.DEBUG and reply:
-                        self.logger.debug(format_msg_controller(msg))
-
-                    try:
-                        itr.sendall(msg)
-                    except BlockingIOError:
-                        continue
-
-                    # Exit pairing loop when player lights have been set and
-                    # vibration has been enabled
-                    if (
-                        reply
-                        and len(reply) > 45
-                        and self.protocol.vibration_enabled
-                        and self.protocol.player_number
-                    ):
-                        break
-
-                    # Switch responds to packets slower during pairing
-                    # Pairing cycle responds optimally on a 15Hz loop
-                    if not received_first_message:
-                        time.sleep(1)
-                    else:
-                        time.sleep(1 / 15)
-
+                self._run_pairing_handshake(itr)
                 break
             except OSError as e:
                 self.logger.debug(e)
 
         self.input.exited_grip_order_menu = False
-
         return itr, ctrl
 
     def reconnect(self, reconnect_address):
-        """Attempts to reconnect with a Switch at the given address.
+        """Reconnects to a Switch at the given address.
 
         :param reconnect_address: The Bluetooth MAC address of the Switch
         :type reconnect_address: string or list
         """
-
-        def recreate_sockets():
-            # Creating control and interrupt sockets
-            ctrl = socket.socket(
-                family=socket.AF_BLUETOOTH,
-                type=socket.SOCK_SEQPACKET,
-                proto=socket.BTPROTO_L2CAP,
-            )
-            itr = socket.socket(
-                family=socket.AF_BLUETOOTH,
-                type=socket.SOCK_SEQPACKET,
-                proto=socket.BTPROTO_L2CAP,
-            )
-
-            return itr, ctrl
-
         self.state["state"] = "reconnecting"
-
-        itr = None
-        ctrl = None
-        if type(reconnect_address) == list:
-            for address in reconnect_address:
-                test_itr, test_ctrl = recreate_sockets()
-                try:
-                    # Setting up HID interrupt/control sockets
-                    test_ctrl.connect((address, 17))
-                    test_itr.connect((address, 19))
-
-                    itr = test_itr
-                    ctrl = test_ctrl
-                except OSError:
-                    test_itr.close()
-                    test_ctrl.close()
-                    pass
-        elif type(reconnect_address) == str:
-            test_itr, test_ctrl = recreate_sockets()
-
-            # Setting up HID interrupt/control sockets
-            test_ctrl.connect((reconnect_address, 17))
-            test_itr.connect((reconnect_address, 19))
-
-            itr = test_itr
-            ctrl = test_ctrl
-
-        if not itr and not ctrl:
-            raise OSError(
-                "Unable to reconnect to sockets at the given address(es)",
-                reconnect_address,
-            )
-
+        itr, ctrl = self.backend.reconnect(reconnect_address)
         fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
-
-        # Send an empty input report to the Switch to prompt a reply
         self.protocol.process_commands(None)
-        msg = self.protocol.get_report()
-        itr.sendall(msg)
-
-        # Setting interrupt connection as non-blocking
-        # In this case, non-blocking means it throws a "BlockingIOError"
-        # for sending and receiving, instead of blocking
-        fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
-
+        itr.sendall(self.protocol.get_report())
         return itr, ctrl
 
     def _on_exit(self):
