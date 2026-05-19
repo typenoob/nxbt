@@ -50,8 +50,8 @@ parser.add_argument(
     required=False,
     default=False,
     action="store_true",
-    help="""Used in conjunction with the macro or tui command. If specified,
-                    nxbt will attmept to reconnect to any previously connected
+    help="""Used with macro, tui, demo, or test. If specified,
+                    nxbt will attempt to reconnect to any previously connected
                     Nintendo Switch.""",
 )
 parser.add_argument(
@@ -59,8 +59,8 @@ parser.add_argument(
     "--address",
     required=False,
     default=False,
-    help="""Used in conjunction with the macro or tui command. If specified,
-                    nxbt will attmept to reconnect to a specific Bluetooth MAC address
+    help="""Used with macro, tui, demo, or test. If specified,
+                    nxbt will attempt to reconnect to a specific Bluetooth MAC address
                     of a Nintendo Switch.""",
 )
 parser.add_argument(
@@ -218,6 +218,8 @@ def demo(args):
     if len(adapters) < 1:
         raise OSError("Unable to detect any Bluetooth adapters.")
 
+    reconnect_target = get_reconnect_target(args)
+
     controller_idxs = []
     for i in range(0, len(adapters)):
         index = nx.create_controller(
@@ -225,6 +227,7 @@ def demo(args):
             adapters[i],
             colour_body=random_colour(),
             colour_buttons=random_colour(),
+            reconnect_address=reconnect_target,
         )
         controller_idxs.append(index)
 
@@ -271,11 +274,14 @@ def test(args):
     print(f"{len(adapters)} Bluetooth adapter(s) available.")
     print("Adapters:", adapters, "\n")
 
-    # Creating a controller
-    print(
-        "[3] Please turn on your Switch and navigate to the 'Change Grip/Order menu.'"
-    )
-    input("Press Enter to continue...")
+    reconnect_target = get_reconnect_target(args)
+
+    if not reconnect_target:
+        # Creating a controller
+        print(
+            "[3] Please turn on your Switch and navigate to the 'Change Grip/Order menu.'"
+        )
+        input("Press Enter to continue...")
 
     print("Creating a controller with the first Bluetooth adapter...")
     cindex = None
@@ -285,6 +291,7 @@ def test(args):
             adapters[0],
             colour_body=random_colour(),
             colour_buttons=random_colour(),
+            reconnect_address=reconnect_target,
         )
     except Exception as e:
         print("Failed to create a controller:")
