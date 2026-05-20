@@ -6,7 +6,7 @@ import traceback
 from sys import exit
 
 from .nxbt import Nxbt, PRO_CONTROLLER
-from .bluez import find_devices_by_alias
+from .backends import BACKENDS
 from .tui import InputTUI
 
 
@@ -120,6 +120,14 @@ parser.add_argument(
     type=int,
     help="""Specifies the connection timeout in seconds for the test command.""",
 )
+parser.add_argument(
+    "-b",
+    "--backend",
+    required=False,
+    default="bumble",
+    choices=list(BACKENDS.keys()),
+    help="""Specifies the Bluetooth backend to use. Defaults to bumble.""",
+)
 
 
 MACRO = """
@@ -171,6 +179,7 @@ A 0.1s
 1.5s
 A 0.1s
 5.0s
+
 """
 
 
@@ -195,12 +204,17 @@ def check_bluetooth_address(address):
         raise ValueError("Invalid Bluetooth address")
 
 
+def make_backend(args):
+    return BACKENDS[args.backend]()
+
+
 def get_reconnect_target(args):
     if args.reconnect:
-        reconnect_target = find_devices_by_alias("Nintendo Switch")
-    elif args.address:
-        check_bluetooth_address(args.address)
-        reconnect_target = args.address
+        reconnect_target = make_backend(args).get_switch_addresses()
+        if args.address:
+            check_bluetooth_address(args.address)
+            if args.address in reconnect_target:
+                reconnect_target = args.address
     else:
         reconnect_target = None
 
@@ -208,34 +222,34 @@ def get_reconnect_target(args):
 
 
 def demo(args):
-    """Loops over all available Bluetooth adapters
-    and creates controllers on each. The last available adapter
-    is used to run a macro.
+    """Creates a controller on the first available adapter
+    and runs a demo macro.
     """
-
-    nx = Nxbt(debug=args.debug, log_to_file=bool(args.logfile))
-    adapters = nx.get_available_adapters()
+    backend = make_backend(args)
+    adapters = backend.get_available_adapters()
     if len(adapters) < 1:
         raise OSError("Unable to detect any Bluetooth adapters.")
 
+    nx = Nxbt(
+        debug=args.debug,
+        log_to_file=bool(args.logfile),
+        backend=backend,
+        adapter_idx=adapters[0],
+    )
     reconnect_target = get_reconnect_target(args)
 
-    controller_idxs = []
-    for i in range(0, len(adapters)):
-        index = nx.create_controller(
-            PRO_CONTROLLER,
-            adapters[i],
-            colour_body=random_colour(),
-            colour_buttons=random_colour(),
-            reconnect_address=reconnect_target,
-        )
-        controller_idxs.append(index)
+    index = nx.create_controller(
+        PRO_CONTROLLER,
+        adapters[0],
+        colour_body=random_colour(),
+        colour_buttons=random_colour(),
+        reconnect_address=reconnect_target,
+    )
 
-    # Run a macro on the last controller
     print("Running Demo...")
-    macro_id = nx.macro(controller_idxs[-1], MACRO, block=False)
-    while macro_id not in nx.state[controller_idxs[-1]]["finished_macros"]:
-        state = nx.state[controller_idxs[-1]]
+    macro_id = nx.macro(index, MACRO, block=False)
+    while macro_id not in nx.state[index]["finished_macros"]:
+        state = nx.state[index]
         if state["state"] == "crashed":
             print("An error occurred while running the demo:")
             print(state["errors"])
@@ -250,8 +264,15 @@ def test(args):
     # Init
     print("[1] Attempting to initialize NXBT...")
     nx = None
+    backend = make_backend(args)
+    adapters = backend.get_available_adapters()
     try:
-        nx = Nxbt(debug=args.debug, log_to_file=bool(args.logfile))
+        nx = Nxbt(
+            debug=args.debug,
+            log_to_file=bool(args.logfile),
+            backend=backend,
+            adapter_idx=adapters[0] if adapters else None,
+        )
     except Exception as e:
         print("Failed to initialize:")
         print(traceback.format_exc())
@@ -260,13 +281,6 @@ def test(args):
 
     # Adapter Check
     print("[2] Checking for Bluetooth adapter availability...")
-    adapters = None
-    try:
-        adapters = nx.get_available_adapters()
-    except Exception as e:
-        print("Failed to check for adapters:")
-        print(traceback.format_exc())
-        exit(1)
     if len(adapters) < 1:
         print("Unable to detect any Bluetooth adapters.")
         print("Please ensure you system has Bluetooth capability.")
@@ -348,12 +362,22 @@ def macro(args):
         print("to load a macro string from.")
         return
 
+    backend = make_backend(args)
+    adapters = backend.get_available_adapters()
+    adapter = adapters[0] if adapters else None
+
+    nx = Nxbt(
+        debug=args.debug,
+        log_to_file=bool(args.logfile),
+        backend=backend,
+        adapter_idx=adapter,
+    )
     reconnect_target = get_reconnect_target(args)
 
-    nx = Nxbt(debug=args.debug, log_to_file=bool(args.logfile))
     print("Creating controller...")
     index = nx.create_controller(
         PRO_CONTROLLER,
+        adapter,
         colour_body=random_colour(),
         colour_buttons=random_colour(),
         reconnect_address=reconnect_target,
@@ -375,8 +399,9 @@ def macro(args):
         sleep(1 / 30)
 
 
-def list_switch_addresses():
-    addresses = find_devices_by_alias("Nintendo Switch")
+def list_switch_addresses(args):
+    backend = make_backend(args)
+    addresses = backend.get_switch_addresses()
 
     if not addresses or len(addresses) < 1:
         print("No Switches have previously connected to this device.")
@@ -393,6 +418,10 @@ def list_switch_addresses():
 
 def main(args=None):
     args = parser.parse_args(args)
+    # Bumble backend need public address to reconnect
+    if not args.backend or args.backend == "bumble":
+        if args.address and not args.address.endswith("/P"):
+            args.address += "/P"
     if args.command == "webapp":
         from .web import start_web_app
 
@@ -408,13 +437,17 @@ def main(args=None):
         macro(args)
     elif args.command == "tui":
         reconnect_target = get_reconnect_target(args)
-        tui = InputTUI(reconnect_target=reconnect_target)
+        tui = InputTUI(reconnect_target=reconnect_target, backend=make_backend(args))
         tui.start()
     elif args.command == "remote_tui":
         reconnect_target = get_reconnect_target(args)
-        tui = InputTUI(reconnect_target=reconnect_target, force_remote=True)
+        tui = InputTUI(
+            reconnect_target=reconnect_target,
+            force_remote=True,
+            backend=make_backend(args),
+        )
         tui.start()
     elif args.command == "addresses":
-        list_switch_addresses()
+        list_switch_addresses(args)
     elif args.command == "test":
         test(args)

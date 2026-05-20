@@ -278,8 +278,14 @@ class InputTUI:
     }
 
     def __init__(
-        self, reconnect_target=None, debug=False, logfile=False, force_remote=False
+        self,
+        reconnect_target=None,
+        debug=False,
+        logfile=False,
+        force_remote=False,
+        backend=None,
     ):
+        self.backend = backend
         self.reconnect_target = reconnect_target
         self.term = Terminal()
         if force_remote:
@@ -337,10 +343,13 @@ class InputTUI:
 
     def mainloop(self, term):
         # Initializing a controller
+        kwargs = {}
+        if self.backend is not None:
+            kwargs["backend"] = self.backend
         if not self.debug:
-            self.nx = Nxbt(disable_logging=True)
+            self.nx = Nxbt(disable_logging=True, **kwargs)
         else:
-            self.nx = Nxbt(debug=self.debug, logfile=self.logfile)
+            self.nx = Nxbt(debug=self.debug, logfile=self.logfile, **kwargs)
         self.controller_index = self.nx.create_controller(
             PRO_CONTROLLER, reconnect_address=self.reconnect_target
         )

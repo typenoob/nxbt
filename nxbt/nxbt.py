@@ -1,5 +1,6 @@
 from multiprocessing import Process, Lock, Queue, Manager
 import queue
+import traceback
 from enum import Enum
 import atexit
 import signal
@@ -11,9 +12,8 @@ import json
 
 from .controller import ControllerServer
 from .controller import ControllerTypes
-from .bluez import find_objects, toggle_clean_bluez
-from .bluez import find_devices_by_alias
-from .bluez import SERVICE_NAME, ADAPTER_INTERFACE
+from .bluez import toggle_clean_bluez
+from .backends import BumbleBackend
 from .logging import create_logger
 
 
@@ -133,7 +133,14 @@ class Nxbt:
     This allows for thread-safe control of emulated controllers.
     """
 
-    def __init__(self, debug=False, log_to_file=False, disable_logging=False):
+    def __init__(
+        self,
+        debug=False,
+        log_to_file=False,
+        disable_logging=False,
+        backend=None,
+        adapter_idx=None,
+    ):
         """Initializes the necessary multiprocessing resources and starts
         the multiprocessing processes.
 
@@ -145,12 +152,32 @@ class Nxbt:
         :type log_to_file: bool, optional
         :param disable_logging: Routes all logging calls to a null log handler.
         :type disable_logging: bool, optional, defaults to False.
+        :param backend: A Backend subclass (or instance for compatibility).
+        Defaults to BumbleBackend.
+        :param adapter_idx: A backend-specific adapter identifier.
+        Defaults to None (auto-select first available).
         """
 
         self.debug = debug
         self.logger = create_logger(
             debug=self.debug, log_to_file=log_to_file, disable_logging=disable_logging
         )
+
+        # Backend selection — store class + idx, not instance, to avoid
+        # pickling thread/socket state across fork.
+        if backend is None:
+            self._backend_cls = BumbleBackend
+            self._adapter_idx = adapter_idx
+            self.backend = self._backend_cls(**self._backend_kwargs())
+        elif isinstance(backend, type):
+            self._backend_cls = backend
+            self._adapter_idx = adapter_idx
+            self.backend = self._backend_cls(**self._backend_kwargs())
+        else:
+            # Instance provided (often for tests); use as-is
+            self._backend_cls = type(backend)
+            self._adapter_idx = getattr(backend, "_transport_spec", adapter_idx)
+            self.backend = backend
 
         # Main queue for nbxt tasks
         self.task_queue = Queue()
@@ -183,13 +210,23 @@ class Nxbt:
         # Starting the nxbt worker process
         self.controllers = Process(
             target=self._command_manager,
-            args=((self.task_queue), (self.manager_state), (self._bluetooth_lock)),
+            args=(
+                self.task_queue,
+                self.manager_state,
+                self._bluetooth_lock,
+                self._backend_cls,
+                self._backend_kwargs(),
+            ),
         )
         # Disabling daemonization since we need to spawn
         # other controller processes, however, this means
         # we need to cleanup on exit.
         self.controllers.daemon = False
         self.controllers.start()
+
+    def _backend_kwargs(self):
+        """Return kwargs for backend instantiation in the current process."""
+        return {"adapter_idx": self._adapter_idx} if self._adapter_idx else {}
 
     def _on_exit(self):
         """The exit handler function used with the atexit module.
@@ -209,7 +246,9 @@ class Nxbt:
         toggle_clean_bluez(False)
 
     @staticmethod
-    def _command_manager(task_queue, state, bluetooth_lock):
+    def _command_manager(
+        task_queue, state, bluetooth_lock, backend_cls, backend_kwargs=None
+    ):
         """Used as the main multiprocessing Process that is launched
         on startup to handle the message passing and instantiation of
         the controllers. Messages are pulled out of a Queue and passed
@@ -221,9 +260,13 @@ class Nxbt:
         :param state: A dict used to store the shared state of the
         emulated controllers.
         :type state: multiprocessing.Manager().dict
+        :param bluetooth_lock: A lock to synchronize Bluetooth actions
+        :param backend_cls: Backend subclass to instantiate
+        :param backend_kwargs: Backend-specific constructor kwargs
         """
 
-        cm = _ControllerManager(state, bluetooth_lock)
+        backend = backend_cls(**(backend_kwargs or {}))
+        cm = _ControllerManager(state, bluetooth_lock, backend)
         # Ensure a SystemExit exception is raised on SIGTERM
         # so that we can gracefully shutdown.
         signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
@@ -237,14 +280,19 @@ class Nxbt:
 
                 if msg:
                     if msg["command"] == NxbtCommands.CREATE_CONTROLLER:
-                        cm.create_controller(
-                            msg["arguments"]["controller_index"],
-                            msg["arguments"]["controller_type"],
-                            msg["arguments"]["adapter_path"],
-                            msg["arguments"]["colour_body"],
-                            msg["arguments"]["colour_buttons"],
-                            msg["arguments"]["reconnect_address"],
-                        )
+                        try:
+                            cm.create_controller(
+                                msg["arguments"]["controller_index"],
+                                msg["arguments"]["controller_type"],
+                                msg["arguments"]["adapter_path"],
+                                msg["arguments"]["colour_body"],
+                                msg["arguments"]["colour_buttons"],
+                                msg["arguments"]["reconnect_address"],
+                            )
+                        except Exception:
+                            idx = msg["arguments"]["controller_index"]
+                            state[idx]["state"] = "crashed"
+                            state[idx]["errors"] = traceback.format_exc()
                     elif msg["command"] == NxbtCommands.INPUT_MACRO:
                         cm.input_macro(
                             msg["arguments"]["controller_index"],
@@ -656,16 +704,13 @@ class Nxbt:
             pass
 
     def get_available_adapters(self):
-        """Gets the DBus paths of all available Bluetooth
-        adapters.
+        """Gets the adapter identifiers of all available adapters.
 
-        :return: A list of available adapter paths
+        :return: A list of available adapter identifiers
         :rtype: list
         """
 
-        adapters = find_objects(SERVICE_NAME, ADAPTER_INTERFACE)
-
-        return adapters
+        return self.backend.get_available_adapters()
 
     def get_switch_addresses(self):
         """Gets the Bluetooth MAC addresses of all
@@ -675,7 +720,7 @@ class Nxbt:
         :rtype: list
         """
 
-        return find_devices_by_alias("Nintendo Switch")
+        return self.backend.get_switch_addresses()
 
     @property
     def state(self):
@@ -719,9 +764,10 @@ class _ControllerManager:
     or macro clearing/stopping.
     """
 
-    def __init__(self, state, lock):
+    def __init__(self, state, lock, backend):
         self.state = state
         self.lock = lock
+        self.backend = backend
         self.controller_resources = Manager()
         self._controller_queues = {}
         self._children = {}
@@ -745,7 +791,7 @@ class _ControllerManager:
         :type index: int
         :param controller_type: The type of Nintendo Switch controller
         :type controller_type: ControllerTypes
-        :param adapter_path: The DBus path to the Bluetooth adapter
+        :param adapter_path: A backend-specific adapter identifier
         :type adapter_path: str
         :param colour_body: A list of three ints representing the hex
         colour of the controller, defaults to None
@@ -777,13 +823,14 @@ class _ControllerManager:
 
         server = ControllerServer(
             controller_type,
-            adapter_path=adapter_path,
+            backend=self.backend,
             lock=self.lock,
             state=controller_state,
             task_queue=controller_queue,
             colour_body=colour_body,
             colour_buttons=colour_buttons,
         )
+
         controller = Process(target=server.run, args=(reconnect_address,))
         controller.daemon = True
         self._children[index] = controller
@@ -820,3 +867,9 @@ class _ControllerManager:
             child.terminate()
 
         self.controller_resources.shutdown()
+
+        # Clean up backend (e.g. reattach USB kernel drivers)
+        try:
+            self.backend.shutdown()
+        except Exception:
+            pass

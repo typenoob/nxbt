@@ -3,9 +3,14 @@ import socket
 import time
 from threading import Thread
 
-from ..bluez import BlueZ
+from ..bluez import (
+    BlueZ,
+    find_objects,
+    find_devices_by_alias,
+    SERVICE_NAME,
+    ADAPTER_INTERFACE,
+)
 from ..controller.controller import ControllerTypes
-from ..utils import load_file
 from .base import Backend
 
 
@@ -21,11 +26,20 @@ class BlueZBackend(Backend):
         ControllerTypes.PRO_CONTROLLER: "Pro Controller",
     }
 
-    def __init__(self, adapter_path="/org/bluez/hci0"):
+    def __init__(self, adapter_idx="/org/bluez/hci0"):
+        super().__init__(adapter_idx)
         self.logger = logging.getLogger("nxbt")
-        self._bt = BlueZ(adapter_path=adapter_path)
+        self._bt = BlueZ(adapter_path=adapter_idx)
         self._crw_running = False
         self._crw_thread = None
+
+    @staticmethod
+    def get_available_adapters() -> list:
+        return find_objects(SERVICE_NAME, ADAPTER_INTERFACE)
+
+    @staticmethod
+    def get_switch_addresses() -> list:
+        return find_devices_by_alias("Nintendo Switch")
 
     @property
     def address(self) -> str:
@@ -38,21 +52,17 @@ class BlueZBackend(Backend):
         self._bt.set_discoverable_timeout(180)
         self._bt.set_alias(self.ALIASES[controller_type])
 
-        sdp_record_path = load_file("../controller/sdp/switch-controller.xml")
-        with open(sdp_record_path, "r") as f:
-            sdp_record = f.read()
-
         opts = {
-            "ServiceRecord": sdp_record,
             "Role": "server",
             "RequireAuthentication": False,
             "RequireAuthorization": False,
             "AutoConnect": True,
         }
         try:
-            self._bt.register_profile(
-                self.SDP_RECORD_PATH, self.SDP_UUID, opts
-            )
+            ...
+            # self._bt.register_profile(
+            #     self.SDP_RECORD_PATH, self.SDP_UUID, opts
+            # )
         except Exception as e:
             self.logger.debug(e)
 
@@ -90,8 +100,8 @@ class BlueZBackend(Backend):
         )
         self._crw_thread.start()
 
-        itr, itr_address = s_itr.accept()
-        ctrl, ctrl_address = s_ctrl.accept()
+        itr, _ = s_itr.accept()
+        ctrl, _ = s_ctrl.accept()
 
         self._crw_running = False
 

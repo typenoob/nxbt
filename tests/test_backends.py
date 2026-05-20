@@ -32,7 +32,9 @@ class TestBlueZBackendAliases:
         ],
     )
     def test_setup_sets_correct_alias(self, controller_type, expected_alias):
-        with patch.object(BlueZBackend, "__init__", lambda self, adapter_path=None: None):
+        with patch.object(
+            BlueZBackend, "__init__", lambda self, adapter_path=None: None
+        ):
             backend = BlueZBackend()
             backend._bt = MagicMock()
 

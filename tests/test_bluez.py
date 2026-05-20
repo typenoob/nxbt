@@ -273,7 +273,9 @@ class TestBlueZFindConnectedDevices:
                 return "Nintendo Switch"
             return None
 
-        with patch.object(bluez_mod, "_get_property", new_callable=AsyncMock) as mock_prop:
+        with patch.object(
+            bluez_mod, "_get_property", new_callable=AsyncMock
+        ) as mock_prop:
             mock_prop.side_effect = prop_side_effect
             bz = BlueZ()
             result = bz.find_connected_devices()
@@ -294,7 +296,9 @@ class TestBlueZFindConnectedDevices:
                 }.get(path, "")
             return None
 
-        with patch.object(bluez_mod, "_get_property", new_callable=AsyncMock) as mock_prop:
+        with patch.object(
+            bluez_mod, "_get_property", new_callable=AsyncMock
+        ) as mock_prop:
             mock_prop.side_effect = prop_side_effect
             bz = BlueZ()
             result = bz.find_connected_devices(alias_filter="Nintendo Switch")
@@ -322,7 +326,9 @@ class TestBlueZFindBondedDevicesByAlias:
                 )
             return None
 
-        with patch.object(bluez_mod, "_get_property", new_callable=AsyncMock) as mock_prop:
+        with patch.object(
+            bluez_mod, "_get_property", new_callable=AsyncMock
+        ) as mock_prop:
             mock_prop.side_effect = prop_side_effect
             bz = BlueZ()
             result = bz.find_bonded_devices_by_alias()
@@ -346,7 +352,9 @@ class TestBlueZFindBondedDevicesByAlias:
                 }.get(path, "")
             return None
 
-        with patch.object(bluez_mod, "_get_property", new_callable=AsyncMock) as mock_prop:
+        with patch.object(
+            bluez_mod, "_get_property", new_callable=AsyncMock
+        ) as mock_prop:
             mock_prop.side_effect = prop_side_effect
             bz = BlueZ()
             result = bz.find_bonded_devices_by_alias("Nintendo Switch")
@@ -370,7 +378,9 @@ class TestBlueZFindBondedDevicesByAlias:
                 }.get(path, "")
             return None
 
-        with patch.object(bluez_mod, "_get_property", new_callable=AsyncMock) as mock_prop:
+        with patch.object(
+            bluez_mod, "_get_property", new_callable=AsyncMock
+        ) as mock_prop:
             mock_prop.side_effect = prop_side_effect
             bz = BlueZ()
             result = bz.find_bonded_devices_by_alias("Nonexistent")
@@ -384,7 +394,9 @@ class TestBlueZDeviceOperations:
     def test_pair_device(self, mock_get, mock_find):
         mock_get.return_value = _make_managed_objects()
 
-        with patch.object(bluez_mod, "_call_method", new_callable=AsyncMock) as mock_call:
+        with patch.object(
+            bluez_mod, "_call_method", new_callable=AsyncMock
+        ) as mock_call:
             bz = BlueZ()
             bz.pair_device("/org/bluez/hci0/dev_11_22_33_44_55_66")
 
@@ -394,7 +406,9 @@ class TestBlueZDeviceOperations:
     def test_connect_device(self, mock_get):
         mock_get.return_value = _make_managed_objects()
 
-        with patch.object(bluez_mod, "_call_method", new_callable=AsyncMock) as mock_call:
+        with patch.object(
+            bluez_mod, "_call_method", new_callable=AsyncMock
+        ) as mock_call:
             bz = BlueZ()
             bz.connect_device("/org/bluez/hci0/dev_11_22_33_44_55_66")
 
@@ -404,7 +418,9 @@ class TestBlueZDeviceOperations:
     def test_remove_device(self, mock_get):
         mock_get.return_value = _make_managed_objects()
 
-        with patch.object(bluez_mod, "_call_method", new_callable=AsyncMock) as mock_call:
+        with patch.object(
+            bluez_mod, "_call_method", new_callable=AsyncMock
+        ) as mock_call:
             bz = BlueZ()
             bz.remove_device("/org/bluez/hci0/dev_11_22_33_44_55_66")
 
@@ -425,7 +441,9 @@ class TestBlueZFindDeviceByAddress:
                 }.get(path, "")
             return None
 
-        with patch.object(bluez_mod, "_get_property", new_callable=AsyncMock) as mock_prop:
+        with patch.object(
+            bluez_mod, "_get_property", new_callable=AsyncMock
+        ) as mock_prop:
             mock_prop.side_effect = prop_side_effect
             bz = BlueZ()
             result = bz.find_device_by_address("AA:BB:CC:DD:EE:FF")

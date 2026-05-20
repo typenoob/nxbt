@@ -8,6 +8,9 @@ class Backend(ABC):
     that return (interrupt, control) transport handles.
     """
 
+    def __init__(self, adapter_idx=None):
+        self._adapter_idx = adapter_idx
+
     @property
     @abstractmethod
     def address(self) -> str:
@@ -24,3 +27,17 @@ class Backend(ABC):
     @abstractmethod
     def reconnect(self, address) -> tuple:
         """Reconnect to a known address. Returns (itr_socket, ctrl_socket)."""
+
+    @staticmethod
+    def get_available_adapters() -> list:
+        """Return a list of available adapter identifiers."""
+        raise NotImplementedError
+
+    @staticmethod
+    def get_switch_addresses() -> list:
+        """Return previously connected Nintendo Switch addresses."""
+        raise NotImplementedError
+
+    def shutdown(self) -> None:
+        """Release resources. Subclasses should override (e.g. reattach USB drivers)."""
+        pass

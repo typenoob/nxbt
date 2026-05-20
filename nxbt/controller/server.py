@@ -7,8 +7,9 @@ import traceback
 import atexit
 import statistics as stat
 
+from nxbt.backends.bumble import BumbleBackend
+
 from .controller import ControllerTypes
-from ..backends import BlueZBackend
 from .protocol import ControllerProtocol
 from .input import InputParser
 from .utils import format_msg_controller, format_msg_switch
@@ -18,13 +19,12 @@ class ControllerServer:
     def __init__(
         self,
         controller_type,
-        adapter_path="/org/bluez/hci0",
+        backend,
         state=None,
         task_queue=None,
         lock=None,
         colour_body=None,
         colour_buttons=None,
-        backend=None,
     ):
         self.logger = logging.getLogger("nxbt")
         # Cache logging level to increase performance on checks
@@ -53,9 +53,8 @@ class ControllerServer:
 
         self.reconnect_counter = 0
 
-        # Intializing Bluetooth
-        self.backend = backend if backend is not None else BlueZBackend(adapter_path=adapter_path)
-        self.bt = self.backend._bt
+        # Initializing Bluetooth
+        self.backend = backend
 
         self.protocol = ControllerProtocol(
             self.controller_type,
@@ -131,6 +130,8 @@ class ControllerServer:
             try:
                 reply = itr.recv(50)
                 if len(reply) > 40:
+                    elapsed = (time.perf_counter() - timer_start) * 1000
+                    self.logger.debug(f"recv took {elapsed:.1f}ms, len={len(reply)}")
                     self.logger.debug(format_msg_switch(reply))
             except BlockingIOError:
                 reply = None
@@ -165,19 +166,28 @@ class ControllerServer:
                 # Cache the last packet to prevent overloading the switch
                 # with packets on the "Change Grip/Order" menu.
                 if msg[3:] != self.cached_msg:
+                    send_start = time.perf_counter()
                     itr.sendall(msg)
+                    send_elapsed = (time.perf_counter() - send_start) * 1000
+                    self.logger.debug(
+                        f"[send] msg len={len(msg)}, sendall took {send_elapsed:.1f}ms"
+                    )
                     self.cached_msg = msg[3:]
                 # Send a blank packet every so often to keep the Switch
                 # from disconnecting from the controller.
                 elif self.tick >= 132:
+                    send_start = time.perf_counter()
                     itr.sendall(msg)
+                    send_elapsed = (time.perf_counter() - send_start) * 1000
+                    self.logger.debug(
+                        f"[send] keepalive len={len(msg)}, sendall took {send_elapsed:.1f}ms"
+                    )
                     self.tick = 0
             except BlockingIOError:
                 continue
             except OSError as e:
                 # Attempt to reconnect to the Switch
                 itr, ctrl = self.save_connection(e)
-
             # Figure out how long it took to process commands
             duration_end = time.perf_counter()
             duration_elapsed = duration_end - duration_start
@@ -198,6 +208,7 @@ class ControllerServer:
 
     def _run_pairing_handshake(self, itr):
         received_first_message = False
+        in_sniff_mode = True
         while True:
             try:
                 reply = itr.recv(50)
@@ -219,6 +230,11 @@ class ControllerServer:
                 itr.sendall(msg)
             except BlockingIOError:
                 continue
+
+            if reply and in_sniff_mode:
+                # if isinstance(self.backend, BumbleBackend):
+                #     self.backend.exit_sniff_mode()
+                in_sniff_mode = False
 
             if (
                 reply

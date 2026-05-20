@@ -15,7 +15,8 @@ def mock_nxbt():
 
 @pytest.fixture
 def mock_find_devices():
-    with patch("nxbt.cli.find_devices_by_alias") as mock:
+    with patch("nxbt.backends.BumbleBackend.get_switch_addresses") as mock:
+        mock.return_value = []
         yield mock
 
 
@@ -92,7 +93,7 @@ def test_macro_command_string(mock_nxbt, capsys):
 
 def test_addresses_command(mock_find_devices, capsys):
     mock_find_devices.return_value = ["XX:XX:XX:XX:XX:XX"]
-    main(["addresses"])
+    main(["addresses", "-b", "bumble"])
     captured = capsys.readouterr()
     assert "num" in captured.out.lower()
     assert "XX:XX:XX:XX:XX:XX" in captured.out

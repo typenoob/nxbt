@@ -56,7 +56,6 @@ class ControllerProtocol:
         :type colour_buttons: list of bytes, optional
         :raises ValueError: On unknown controller type
         """
-
         self.bt_address = bt_address
 
         if controller_type in self.CONTROLLER_INFO.keys():
@@ -302,6 +301,8 @@ class ControllerProtocol:
         for address_byte_str in address:
             # Converting string address bytes to hex
             # and assigning to report
+            if address_byte_str.endswith("/P"):
+                address_byte_str = address_byte_str.replace("/P", "")
             address_byte = int(address_byte_str, 16)
             self.report[address_location] = address_byte
             address_location += 1

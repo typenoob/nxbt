@@ -1,0 +1,654 @@
+import asyncio
+import logging
+import queue
+import select
+import socket
+import struct
+import threading
+import xml.etree.ElementTree as ET
+from bumble import hci
+
+from nxbt.bluez import toggle_clean_bluez
+
+from bumble.core import UUID
+from bumble.device import Device
+from bumble.hci import (
+    Address,
+    HCI_Write_Default_Link_Policy_Settings_Command,
+)
+from bumble.l2cap import ClassicChannel, ClassicChannelSpec
+from bumble.keys import JsonKeyStore
+from bumble.pairing import PairingConfig, PairingDelegate
+from bumble.sdp import DataElement, ServiceAttribute
+from bumble.transport import open_transport_or_link
+
+from ..controller.controller import ControllerTypes
+from ..utils import load_file
+from .base import Backend
+
+HID_CONTROL_PSM = 0x0011
+HID_INTERRUPT_PSM = 0x0013
+
+
+class _ChannelSocketBridge:
+    """Bridges a Bumble ClassicChannel to a Python socket via a socketpair.
+
+    Two background threads forward data:
+    - _drain: reads server-sent data from socketpair, sends to Bumble channel
+    - _pump: drains PDU queue, writes to socketpair end for server to recv
+
+    Threads start immediately.
+    """
+
+    def __init__(self, channel: ClassicChannel, on_first_send=None):
+        self.channel = channel
+        self._pdu_queue: queue.Queue[bytes | None] = queue.Queue()
+        self._closed = False
+        self._channel_open = threading.Event()
+        self._on_first_send = on_first_send
+        self._first_send_done = False
+
+        # Socket pair: self._s1 <-> self.socket
+        # Server reads/writes self.socket; bridge reads/writes self._s1
+        s1, self.socket = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._s1 = s1
+
+        def channel_sink(pdu: bytes):
+            if not self._closed:
+                self._pdu_queue.put_nowait(pdu)
+
+        channel.sink = channel_sink
+        channel.on("close", self._on_channel_close)
+        channel.on("open", self._on_channel_open)
+
+        # Check if already open
+        if getattr(channel, "state", None) == channel.State.OPEN:
+            self._on_channel_open()
+
+        # Start threads immediately
+        self._drain_thread = threading.Thread(
+            target=self._drain_loop, daemon=True, name="nxbt-bumble-drain"
+        )
+        self._pump_thread = threading.Thread(
+            target=self._pump_loop, daemon=True, name="nxbt-bumble-pump"
+        )
+        self._drain_thread.start()
+        self._pump_thread.start()
+
+    def _send_pdu(self, data: bytes, logger: logging.Logger) -> bool:
+        if not self._channel_open.is_set():
+            self._channel_open.wait(timeout=30)
+            if not self._channel_open.is_set() or self._closed:
+                return False
+        try:
+            self.channel.send_pdu(data)
+            if self._on_first_send and not self._first_send_done:
+                self._first_send_done = True
+                self._on_first_send()
+            return True
+        except Exception as e:
+            logger.debug(f"_drain_loop send_pdu failed: {type(e).__name__}: {e}")
+            try:
+                self._s1.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            return False
+
+    def _on_channel_open(self):
+        self._channel_open.set()
+
+    def _on_channel_close(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._pdu_queue.put_nowait(None)
+        # Shutdown before close to unblock select/recv in drain/pump threads
+        try:
+            self._s1.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+    def _drain_loop(self):
+        """Read data from server socket and send to Bumble channel."""
+        logger = logging.getLogger("nxbt")
+        logger.debug(f"_drain_loop started, _s1 fd={self._s1.fileno()}")
+        try:
+            while True:
+                try:
+                    readable, _, _ = select.select([self._s1], [], [], 1.0)
+                except OSError as e:
+                    logger.debug(f"_drain_loop select failed: {e}")
+                    break
+                if not readable:
+                    if self._closed:
+                        break
+                    continue
+
+                try:
+                    data = self._s1.recv(4096)
+                    if not data:
+                        break  # server closed socket
+                except OSError as e:
+                    logger.debug(f"_drain_loop recv failed: {e}")
+                    break
+
+                if not self._send_pdu(data, logger):
+                    return
+        except Exception as e:
+            logger.debug(f"_drain_loop crashed: {e}")
+        finally:
+            self._closed = True
+            logger.debug("_drain_loop exiting")
+            try:
+                self._s1.close()
+            except OSError:
+                pass
+
+    def _pump_loop(self):
+        """Drain PDU queue and write to socketpair for server to recv."""
+        while True:
+            # Use blocking queue.get() — queue.put() wakes this immediately
+            pdu = self._pdu_queue.get()
+            if pdu is None:
+                return
+            try:
+                self._s1.sendall(pdu)
+            except OSError:
+                return
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        self._pdu_queue.put_nowait(None)
+        try:
+            self.channel.disconnect()
+        except Exception:
+            pass
+
+
+class _BumbleSocket:
+    """Wraps a socket with getpeername/getsockname returning Bluetooth addresses."""
+
+    def __init__(self, sock: socket.socket, peer_address: str, local_address: str):
+        self._sock = sock
+        self._peer_address = peer_address
+        self._local_address = local_address
+
+    def recv(self, bufsize: int, flags: int = 0) -> bytes:
+        return self._sock.recv(bufsize, flags)
+
+    def send(self, data: bytes, flags: int = 0) -> int:
+        return self._sock.send(data, flags)
+
+    def sendall(self, data: bytes, flags: int = 0) -> None:
+        self._sock.sendall(data, flags)
+
+    def getpeername(self):
+        return (self._peer_address,)
+
+    def getsockname(self):
+        return (self._local_address,)
+
+    def fileno(self):
+        return self._sock.fileno()
+
+    def setblocking(self, flag: bool):
+        self._sock.setblocking(flag)
+
+    def settimeout(self, value):
+        self._sock.settimeout(value)
+
+    def gettimeout(self):
+        return self._sock.gettimeout()
+
+    def close(self):
+        self._sock.close()
+
+    def shutdown(self, how):
+        self._sock.shutdown(how)
+
+
+class BumbleBackend(Backend):
+    """Bumble Bluetooth stack backend implementation."""
+
+    ALIASES = {
+        ControllerTypes.JOYCON_L: "Joy-Con (L)",
+        ControllerTypes.JOYCON_R: "Joy-Con (R)",
+        ControllerTypes.PRO_CONTROLLER: "Pro Controller",
+    }
+
+    def exit_sniff_mode(self):
+        self._run_async(
+            self._device.send_command(
+                hci.HCI_Exit_Sniff_Mode_Command(
+                    connection_handle=self._device.connections[256].handle
+                )
+            )
+        )
+
+    @staticmethod
+    def get_available_adapters() -> list[str]:
+        """Scan for HCI adapters via HCI sockets or USB."""
+        toggle_clean_bluez(True)
+        adapters = []
+
+        # Try HCI sockets first (works when bluetoothd is stopped or on systems with permission)
+        HCI_CHANNEL_USER = 1
+        import ctypes
+
+        for idx in range(8):
+            try:
+                s = socket.socket(
+                    socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI
+                )
+                libc = ctypes.CDLL("libc.so.6", use_errno=True)
+                libc.bind.argtypes = (
+                    ctypes.c_int,
+                    ctypes.POINTER(ctypes.c_char),
+                    ctypes.c_int,
+                )
+                libc.bind.restype = ctypes.c_int
+                bind_addr = struct.pack(
+                    "<HHH", socket.AF_BLUETOOTH, idx, HCI_CHANNEL_USER
+                )
+                ret = libc.bind(
+                    s.fileno(), ctypes.create_string_buffer(bind_addr), len(bind_addr)
+                )
+                s.close()
+                if ret == 0:
+                    adapters.append(f"hci-socket:{idx}")
+            except Exception as e:
+                pass
+
+        # Scan for USB Bluetooth adapters as fallback
+        try:
+            import usb.core
+
+            for idx, _ in enumerate(usb.core.find(find_all=True, bDeviceClass=0xE0)):
+                adapters.append(f"usb:{idx}")
+        except Exception:
+            pass
+
+        return adapters
+
+    @staticmethod
+    def get_switch_addresses() -> list[str]:
+        """Read bonded peer addresses from the JsonKeyStore file."""
+        keystore = JsonKeyStore()
+        import json
+        import os
+
+        if not os.path.exists(keystore.filename):
+            return []
+        try:
+            with open(keystore.filename, "r", encoding="utf-8") as f:
+                db = json.load(f)
+        except Exception:
+            return []
+        # Try the namespace first, then fall back to single-namespace or default
+        key_map = db.get(keystore.namespace)
+        if key_map is None and len(db) == 1:
+            key_map = next(iter(db.values()))
+        if key_map is None and keystore.namespace == JsonKeyStore.DEFAULT_NAMESPACE:
+            key_map = db.get(JsonKeyStore.DEFAULT_NAMESPACE, {})
+        return [k for k in key_map] if key_map else []
+
+    def __init__(
+        self,
+        adapter_idx: str | None = None,
+    ):
+        super().__init__(adapter_idx)
+        self.logger = logging.getLogger("nxbt")
+        # Enable Bumble's debug logging
+        bumble_logger = logging.getLogger("bumble")
+        bumble_logger.setLevel(logging.DEBUG)
+        self.logger.debug("Bumble debug logging enabled")
+
+        # Default to first available HCI socket adapter
+        if adapter_idx is None:
+            adapters = self.get_available_adapters()
+            adapter_idx = adapters[0] if adapters else "hci-socket:0"
+
+        self._transport_spec = adapter_idx
+        self._device: Device | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread: threading.Thread | None = None
+        self._bridges: list[_ChannelSocketBridge] = []
+        # For accept() coordination
+        self._ctrl_future: asyncio.Future | None = None
+        self._itr_future: asyncio.Future | None = None
+        self._transport = None
+        # Track USB device for cleanup
+        self._usb_device = None
+        # Store controller type for device reset
+        self._pending_controller_type = None
+
+    @property
+    def address(self) -> str:
+        if self._device is not None:
+            addr = self._device.public_address or self._device.random_address
+            return str(addr).upper()
+        return "00:00:00:00:00:00"
+
+    def _start_event_loop(self):
+        """Start a persistent asyncio event loop in a background thread."""
+        self._loop = asyncio.new_event_loop()
+
+        def run_loop():
+            asyncio.set_event_loop(self._loop)
+            self._loop.run_forever()
+
+        self._loop_thread = threading.Thread(
+            target=run_loop, daemon=True, name="nxbt-bumble-loop"
+        )
+        self._loop_thread.start()
+
+    def _stop_event_loop(self):
+        for bridge in self._bridges:
+            bridge.close()
+        self._bridges.clear()
+
+        if self._transport:
+            try:
+                self._run_async(self._transport.close())
+            except Exception:
+                pass
+            self._transport = None
+
+        if self._loop and self._loop.is_running():
+            self._loop.call_soon_threadsafe(self._loop.stop)
+        if self._loop_thread and self._loop_thread.is_alive():
+            self._loop_thread.join(timeout=2)
+        if self._loop:
+            try:
+                self._loop.close()
+            except Exception:
+                pass
+        self._loop = None
+        self._device = None
+
+    def _reattach_usb_drivers(self):
+        """Reattach kernel drivers on USB interfaces we claimed."""
+        if not self._usb_device:
+            return
+        try:
+            for cfg in self._usb_device:
+                for intf in cfg:
+                    try:
+                        if self._usb_device.is_kernel_driver_active(
+                            intf.bInterfaceNumber
+                        ):
+                            self._usb_device.attach_kernel_driver(intf.bInterfaceNumber)
+                            self.logger.debug(
+                                f"Reattached kernel driver to interface {intf.bInterfaceNumber}"
+                            )
+                    except Exception:
+                        pass
+            self.logger.debug("USB kernel drivers reattached")
+        except Exception as e:
+            self.logger.debug(f"Failed to reattach USB kernel drivers: {e}")
+        self._usb_device = None
+
+    def shutdown(self):
+        """Clean up the transport, bridges, and event loop."""
+        self._stop_event_loop()
+        self._reattach_usb_drivers()
+
+    def _run_async(self, coro):
+        """Run an async coroutine on the background event loop."""
+        assert self._loop is not None
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result(timeout=30)
+
+    def _xml_to_data_element(self, elem: ET.Element) -> DataElement:
+        """Convert an SDP XML element tree to a Bumble DataElement."""
+        de = DataElement
+        tag = elem.tag
+        if tag == "record":
+            return de(de.SEQUENCE, [self._xml_to_data_element(child) for child in elem])
+        elif tag == "attribute":
+            attr_id = int(elem.attrib["id"], 0)
+            id_elem = de(de.UNSIGNED_INTEGER, attr_id, value_size=2)
+            return de(
+                de.SEQUENCE,
+                [id_elem] + [self._xml_to_data_element(child) for child in elem],
+            )
+        elif tag == "sequence":
+            return de(de.SEQUENCE, [self._xml_to_data_element(child) for child in elem])
+        elif tag == "uuid":
+            value = elem.attrib["value"]
+            # Convert hex string like "0x1124" to full UUID
+            if value.startswith("0x"):
+                return de(de.UUID, UUID.from_16_bits(int(value, 16)))
+            return de(de.UUID, UUID(value))
+        elif tag == "uint8":
+            return de(de.UNSIGNED_INTEGER, int(elem.attrib["value"], 0), value_size=1)
+        elif tag == "uint16":
+            return de(de.UNSIGNED_INTEGER, int(elem.attrib["value"], 0), value_size=2)
+        elif tag == "text":
+            text_value = elem.attrib["value"]
+            if elem.attrib.get("encoding") == "hex":
+                return de(de.TEXT_STRING, bytes.fromhex(text_value))
+            return de(de.TEXT_STRING, text_value.encode("utf-8"))
+        elif tag == "boolean":
+            return de(de.BOOLEAN, elem.attrib["value"].lower() == "true")
+        else:
+            raise ValueError(f"Unknown SDP element: {tag}")
+
+    def _build_sdp_record(self) -> list:
+        """Parse the SDP service record from switch-controller.xml."""
+        sdp_record_path = load_file("../controller/sdp/switch-controller.xml")
+        tree = ET.parse(sdp_record_path)
+        root = tree.getroot()
+        record = self._xml_to_data_element(root)
+        # Record is a SEQUENCE of ATTRIBUTE elements; extract into attribute list
+        assert record.type == DataElement.SEQUENCE
+        service_attributes = []
+        for attr_elem in record.value:
+            if attr_elem.type != DataElement.SEQUENCE or len(attr_elem.value) != 2:
+                continue
+            attr_id = attr_elem.value[0]
+            attr_value = attr_elem.value[1]
+            if attr_id.type == DataElement.UNSIGNED_INTEGER:
+                service_attributes.append(ServiceAttribute(attr_id.value, attr_value))
+        return service_attributes
+
+    def _setup_async(self, controller_type):
+        """Async setup of the Bumble device."""
+        # If using USB transport, find the device for later cleanup
+        if self._transport_spec.startswith("usb:"):
+            import usb.core
+
+            try:
+                usb_idx = int(self._transport_spec.split(":")[1])
+                devices = list(usb.core.find(find_all=True, bDeviceClass=0xE0))
+                if usb_idx < len(devices):
+                    self._usb_device = devices[usb_idx]
+            except Exception as e:
+                self.logger.debug(f"Could not find USB device for cleanup: {e}")
+
+        # Open transport
+        self._transport = self._run_async(open_transport_or_link(self._transport_spec))
+
+        # Create device
+        addr = str(Address("00:00:00:00:00:00"))
+        self._device = Device.with_hci(
+            self.ALIASES[controller_type],
+            Address(addr),
+            self._transport.source,
+            self._transport.sink,
+        )
+
+        # Configure Classic Bluetooth
+        self._device.keystore = JsonKeyStore()
+        self._device.classic_enabled = True
+        self._device.class_of_device = 0x002508  # Gamepad
+        self._device.discoverable = True
+        self._device.connectable = True
+
+        # Configure pairing (NoInputNoOutput, auto-accept)
+        self._device.pairing_config_factory = lambda _: PairingConfig(
+            sc=True,
+            mitm=False,
+            bonding=True,
+            delegate=PairingDelegate(
+                io_capability=PairingDelegate.IoCapability.NO_OUTPUT_NO_INPUT
+            ),
+        )
+
+        # Register SDP service record
+        sdp_record = self._build_sdp_record()
+        self.logger.debug(f"SDP record registered: {len(sdp_record)} attributes")
+        self._device.sdp_service_records = {0x00010001: sdp_record}
+        # Power on
+        self._run_async(self._device.power_on())
+        # Write default link policy
+        self._run_async(
+            self._device.send_command(
+                HCI_Write_Default_Link_Policy_Settings_Command(
+                    default_link_policy_settings=0x0005
+                )
+            )
+        )
+
+        # Backward compat: server does self.bt = self.backend._bt
+        self._bt = self._device
+
+    def setup(self, controller_type) -> None:
+        self._pending_controller_type = controller_type
+        self._start_event_loop()
+        try:
+            self._setup_async(controller_type)
+        except Exception:
+            self._stop_event_loop()
+            # Reattach USB kernel drivers on setup failure so retries can succeed
+            self._reattach_usb_drivers()
+            raise
+
+    def _on_l2cap_connection(self, psm: int, channel: ClassicChannel):
+        """Called when a peer connects to one of our L2CAP servers."""
+        if self._device is None:
+            return
+        local_addr = str(self._device.public_address or self._device.random_address)
+        peer_addr = str(channel.connection.peer_address)
+
+        def _on_open():
+            self.logger.debug(
+                f"[L2CAP PSM={psm}] channel OPEN state reached, "
+                f"src_cid={channel.source_cid}, dst_cid={channel.destination_cid}, "
+                f"MTU={channel.mtu}/{channel.peer_mtu}"
+            )
+
+        def _on_close():
+            self.logger.warning(
+                f"[L2CAP PSM={psm}] channel CLOSED, state={channel.state.name}, "
+                f"src_cid={channel.source_cid}, dst_cid={channel.destination_cid}"
+            )
+
+        channel.on("open", _on_open)
+        channel.on("close", _on_close)
+
+        on_first_send = self.exit_sniff_mode if psm == HID_INTERRUPT_PSM else None
+
+        bridge = _ChannelSocketBridge(channel, on_first_send)
+        self._bridges.append(bridge)
+
+        bumble_socket = _BumbleSocket(bridge.socket, peer_addr, local_addr)
+        # Also store the bridge on the socket for cleanup
+        bumble_socket._bridge = bridge
+
+        if psm == HID_INTERRUPT_PSM:
+            if self._itr_future and not self._itr_future.done():
+                self._loop.call_soon_threadsafe(
+                    self._itr_future.set_result, bumble_socket
+                )
+        elif psm == HID_CONTROL_PSM:
+            if self._ctrl_future and not self._ctrl_future.done():
+                self._loop.call_soon_threadsafe(
+                    self._ctrl_future.set_result, bumble_socket
+                )
+
+    def accept(self) -> tuple:
+        self._bridges = []
+        self._ctrl_future = self._loop.create_future()
+        self._itr_future = self._loop.create_future()
+
+        # Register L2CAP servers — if PSMs are already registered from a
+        # previous failed setup, reset the device and retry.
+        try:
+            self._device.create_l2cap_server(
+                spec=ClassicChannelSpec(psm=HID_CONTROL_PSM),
+                handler=lambda ch: self._on_l2cap_connection(HID_CONTROL_PSM, ch),
+            )
+            self._device.create_l2cap_server(
+                spec=ClassicChannelSpec(psm=HID_INTERRUPT_PSM),
+                handler=lambda ch: self._on_l2cap_connection(HID_INTERRUPT_PSM, ch),
+            )
+        except Exception as e:
+            self.logger.debug(f"L2CAP server registration failed: {e}")
+            raise
+
+        self.logger.debug("BumbleBackend: waiting for incoming HID connections...")
+
+        self._run_async(asyncio.wait_for(self._ctrl_future, 120))
+        self._run_async(asyncio.wait_for(self._itr_future, 120))
+
+        ctrl = self._ctrl_future.result()
+        itr = self._itr_future.result()
+
+        self.logger.debug(
+            f"BumbleBackend: accepted connection from {itr.getpeername()[0]}"
+        )
+        self._ctrl_future = None
+        self._itr_future = None
+        return itr, ctrl
+
+    def reconnect(self, reconnect_address: str) -> tuple:
+        addresses = (
+            reconnect_address
+            if isinstance(reconnect_address, list)
+            else [reconnect_address]
+        )
+        for address in addresses:
+            self.logger.debug(f"BumbleBackend: reconnecting to {address}...")
+            if 256 in self._device.connections:
+                conn = self._device.connections[256]
+            else:
+                conn = self._run_async(self._device.connect_classic(address))
+                self._run_async(conn.authenticate())
+                self._run_async(conn.encrypt())
+            # Old bridges have dead socketpairs (shutdown on channel close).
+            # Create fresh L2CAP channels and fresh bridges.
+            ctrl_channel = self._run_async(
+                conn.create_l2cap_channel(ClassicChannelSpec(psm=HID_CONTROL_PSM))
+            )
+
+            itr_channel = self._run_async(
+                conn.create_l2cap_channel(ClassicChannelSpec(psm=HID_INTERRUPT_PSM))
+            )
+
+            local_addr = str(self._device.public_address or self._device.random_address)
+            self._bridges.clear()
+
+            # Replace old dead bridges with fresh ones
+            itr_bridge = _ChannelSocketBridge(itr_channel)
+            self._bridges.append(itr_bridge)
+            itr = _BumbleSocket(itr_bridge.socket, address, local_addr)
+            itr._bridge = itr_bridge
+
+            ctrl_bridge = _ChannelSocketBridge(ctrl_channel)
+            self._bridges.append(ctrl_bridge)
+            ctrl = _BumbleSocket(ctrl_bridge.socket, address, local_addr)
+            ctrl._bridge = ctrl_bridge
+
+            self.logger.debug(f"BumbleBackend: reconnected to {address}")
+            return itr, ctrl
+
+        raise OSError(
+            "Unable to reconnect to channels at the given address(es)",
+            reconnect_address,
+        )
+
+    def __del__(self):
+        self._stop_event_loop()
