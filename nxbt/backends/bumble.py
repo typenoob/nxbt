@@ -229,6 +229,7 @@ class BumbleBackend(Backend):
     def get_available_adapters() -> list[str]:
         """Scan for HCI adapters via HCI sockets or USB."""
         from .internal.bluez import toggle_clean_bluez
+
         toggle_clean_bluez(True)
         adapters = []
 
@@ -318,8 +319,6 @@ class BumbleBackend(Backend):
         self._ctrl_future: asyncio.Future | None = None
         self._itr_future: asyncio.Future | None = None
         self._transport = None
-        # Track USB device for cleanup
-        self._usb_device = None
         # Store controller type for device reset
         self._pending_controller_type = None
 
@@ -369,25 +368,35 @@ class BumbleBackend(Backend):
 
     def _reattach_usb_drivers(self):
         """Reattach kernel drivers on USB interfaces we claimed."""
-        if not self._usb_device:
+        if not self._transport_spec.startswith("usb:"):
             return
         try:
-            for cfg in self._usb_device:
+            import usb.core
+
+            try:
+                usb_idx = int(self._transport_spec.split(":")[1])
+                devices = list(usb.core.find(find_all=True, bDeviceClass=0xE0))
+                print(f"usb_idx={usb_idx}, devices_found={len(devices)}")
+                if usb_idx < len(devices):
+                    usb_device = devices[usb_idx]
+            except Exception as e:
+                print(f"[{id(self)}] USB exception: {e}")
+                self.logger.debug(f"Could not find USB device for cleanup: {e}")
+            for cfg in usb_device:
                 for intf in cfg:
                     try:
-                        if self._usb_device.is_kernel_driver_active(
+                        if not usb_device.is_kernel_driver_active(
                             intf.bInterfaceNumber
                         ):
-                            self._usb_device.attach_kernel_driver(intf.bInterfaceNumber)
+                            usb_device.attach_kernel_driver(intf.bInterfaceNumber)
                             self.logger.debug(
                                 f"Reattached kernel driver to interface {intf.bInterfaceNumber}"
                             )
-                    except Exception:
+                    except Exception as e:
                         pass
             self.logger.debug("USB kernel drivers reattached")
         except Exception as e:
             self.logger.debug(f"Failed to reattach USB kernel drivers: {e}")
-        self._usb_device = None
 
     def shutdown(self):
         """Clean up the transport, bridges, and event loop."""
@@ -455,18 +464,6 @@ class BumbleBackend(Backend):
 
     def _setup_async(self, controller_type):
         """Async setup of the Bumble device."""
-        # If using USB transport, find the device for later cleanup
-        if self._transport_spec.startswith("usb:"):
-            import usb.core
-
-            try:
-                usb_idx = int(self._transport_spec.split(":")[1])
-                devices = list(usb.core.find(find_all=True, bDeviceClass=0xE0))
-                if usb_idx < len(devices):
-                    self._usb_device = devices[usb_idx]
-            except Exception as e:
-                self.logger.debug(f"Could not find USB device for cleanup: {e}")
-
         # Open transport
         self._transport = self._run_async(open_transport_or_link(self._transport_spec))
 
@@ -510,9 +507,6 @@ class BumbleBackend(Backend):
                 )
             )
         )
-
-        # Backward compat: server does self.bt = self.backend._bt
-        self._bt = self._device
 
     def setup(self, controller_type) -> None:
         self._pending_controller_type = controller_type

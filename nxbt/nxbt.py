@@ -165,6 +165,7 @@ class Nxbt:
         # pickling thread/socket state across fork.
         if backend is None:
             from .backends import BumbleBackend
+
             self._backend_cls = BumbleBackend
             self._adapter_idx = adapter_idx
             self.backend = self._backend_cls(**self._backend_kwargs())
@@ -202,6 +203,7 @@ class Nxbt:
         # Disable the BlueZ input plugin so we can use the
         # HID control/interrupt Bluetooth ports
         from .backends.internal.bluez import toggle_clean_bluez
+
         toggle_clean_bluez(True)
 
         # Exit handler
@@ -243,7 +245,13 @@ class Nxbt:
         self.resource_manager.shutdown()
         # Re-enable the BlueZ plugins, if we have permission
         from .backends.internal.bluez import toggle_clean_bluez
+
         toggle_clean_bluez(False)
+        # Clean up backend (e.g. reattach USB kernel drivers)
+        try:
+            self.backend.shutdown()
+        except Exception:
+            pass
 
     @staticmethod
     def _command_manager(
@@ -866,9 +874,3 @@ class _ControllerManager:
             child.terminate()
 
         self.controller_resources.shutdown()
-
-        # Clean up backend (e.g. reattach USB kernel drivers)
-        try:
-            self.backend.shutdown()
-        except Exception:
-            pass
