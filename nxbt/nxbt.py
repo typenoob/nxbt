@@ -275,6 +275,8 @@ class Nxbt:
 
         backend = backend_cls(**(backend_kwargs or {}))
         cm = _ControllerManager(state, bluetooth_lock, backend)
+        # Ignore SIGINT in the child — only the parent handles Ctrl+C.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         # Ensure a SystemExit exception is raised on SIGTERM
         # so that we can gracefully shutdown.
         signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
