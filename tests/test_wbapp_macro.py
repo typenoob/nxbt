@@ -23,8 +23,8 @@ def mock_nxbt():
 
 
 @pytest.fixture
-def app_module(mock_nxbt):
-    """Import web app and replace the module-level nxbt instance."""
+def app_module(mock_nxbt_web, mock_nxbt):
+    """Import web app after Nxbt has been patched."""
     from nxbt.web import app as web_app_module
 
     web_app_module.nxbt = mock_nxbt

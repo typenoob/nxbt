@@ -10,7 +10,7 @@ from unittest.mock import patch, AsyncMock, MagicMock
 # This avoids conflicts with conftest.py's global mock of nxbt.bluez
 _spec = importlib.util.spec_from_file_location(
     "_real_bluez",
-    "/home/coyote/nxbt/nxbt/bluez.py",
+    "/home/coyote/nxbt/nxbt/backends/internal/bluez.py",
 )
 bluez_mod = importlib.util.module_from_spec(_spec)
 sys.modules["_real_bluez"] = bluez_mod

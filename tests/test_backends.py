@@ -38,7 +38,6 @@ class TestBlueZBackendAliases:
             backend = BlueZBackend()
             backend._bt = MagicMock()
 
-            with patch("nxbt.backends.bluez.load_file", return_value="/dev/null"):
-                backend.setup(controller_type)
+            backend.setup(controller_type)
 
             backend._bt.set_alias.assert_called_once_with(expected_alias)
