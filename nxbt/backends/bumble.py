@@ -20,6 +20,8 @@ from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport_or_link
 
+from .internal.bluez import get_hci_state, toggle_hci_adapter
+
 from ..controller.controller import ControllerTypes
 from ..utils import load_file
 from .base import Backend
@@ -38,13 +40,11 @@ class _ChannelSocketBridge:
     Threads start immediately.
     """
 
-    def __init__(self, channel: ClassicChannel, on_first_send=None):
+    def __init__(self, channel: ClassicChannel):
         self.channel = channel
         self._pdu_queue: queue.Queue[bytes | None] = queue.Queue()
         self._closed = False
         self._channel_open = threading.Event()
-        self._on_first_send = on_first_send
-        self._first_send_done = False
 
         # Socket pair: self._s1 <-> self.socket
         # Server reads/writes self.socket; bridge reads/writes self._s1
@@ -80,9 +80,6 @@ class _ChannelSocketBridge:
                 return False
         try:
             self.channel.send_pdu(data)
-            if self._on_first_send and not self._first_send_done:
-                self._first_send_done = True
-                self._on_first_send()
             return True
         except Exception as e:
             logger.debug(f"_drain_loop send_pdu failed: {type(e).__name__}: {e}")
@@ -216,48 +213,19 @@ class BumbleBackend(Backend):
         ControllerTypes.PRO_CONTROLLER: "Pro Controller",
     }
 
-    def exit_sniff_mode(self):
-        self._run_async(
-            self._device.send_command(
-                hci.HCI_Exit_Sniff_Mode_Command(
-                    connection_handle=self._device.connections[256].handle
-                )
-            )
-        )
-
     @staticmethod
     def get_available_adapters() -> list[str]:
         """Scan for HCI adapters via HCI sockets or USB."""
-        from .internal.bluez import toggle_clean_bluez
-
-        toggle_clean_bluez(True)
         adapters = []
-
-        # Try HCI sockets first (works when bluetoothd is stopped or on systems with permission)
-        HCI_CHANNEL_USER = 1
-        import ctypes
 
         for idx in range(8):
             try:
-                s = socket.socket(
-                    socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI
-                )
-                libc = ctypes.CDLL("libc.so.6", use_errno=True)
-                libc.bind.argtypes = (
-                    ctypes.c_int,
-                    ctypes.POINTER(ctypes.c_char),
-                    ctypes.c_int,
-                )
-                libc.bind.restype = ctypes.c_int
-                bind_addr = struct.pack(
-                    "<HHH", socket.AF_BLUETOOTH, idx, HCI_CHANNEL_USER
-                )
-                ret = libc.bind(
-                    s.fileno(), ctypes.create_string_buffer(bind_addr), len(bind_addr)
-                )
-                s.close()
-                if ret == 0:
-                    adapters.append(f"hci-socket:{idx}")
+                import os
+
+                for entry in os.listdir("/sys/class/bluetooth/"):
+                    if entry.startswith("hci"):
+                        idx = entry.replace("hci", "")
+                        adapters.append(f"hci-socket:{idx}")
             except Exception as e:
                 pass
 
@@ -311,6 +279,7 @@ class BumbleBackend(Backend):
             adapter_idx = adapters[0] if adapters else "hci-socket:0"
 
         self._transport_spec = adapter_idx
+        self._transport_idx = int(self._transport_spec.split(":")[1])
         self._device: Device | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_thread: threading.Thread | None = None
@@ -321,6 +290,10 @@ class BumbleBackend(Backend):
         self._transport = None
         # Store controller type for device reset
         self._pending_controller_type = None
+
+        if self._transport_spec.startswith("hci"):
+            self._hci_old_state = get_hci_state(self._transport_idx)
+            toggle_hci_adapter(self._transport_idx)
 
     @property
     def address(self) -> str:
@@ -400,6 +373,7 @@ class BumbleBackend(Backend):
 
     def shutdown(self):
         """Clean up the transport, bridges, and event loop."""
+        toggle_hci_adapter(self._transport_idx, self._hci_old_state)
         self._stop_event_loop()
         self._reattach_usb_drivers()
 
@@ -542,9 +516,7 @@ class BumbleBackend(Backend):
         channel.on("open", _on_open)
         channel.on("close", _on_close)
 
-        on_first_send = self.exit_sniff_mode if psm == HID_INTERRUPT_PSM else None
-
-        bridge = _ChannelSocketBridge(channel, on_first_send)
+        bridge = _ChannelSocketBridge(channel)
         self._bridges.append(bridge)
 
         bumble_socket = _BumbleSocket(bridge.socket, peer_addr, local_addr)

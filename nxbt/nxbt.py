@@ -200,12 +200,6 @@ class Nxbt:
         self._adapters_in_use = {}
         self._controller_adapter_lookup = {}
 
-        # Disable the BlueZ input plugin so we can use the
-        # HID control/interrupt Bluetooth ports
-        from .backends.internal.bluez import toggle_clean_bluez
-
-        toggle_clean_bluez(True)
-
         # Exit handler
         atexit.register(self._on_exit)
 
@@ -247,10 +241,7 @@ class Nxbt:
                 self.controllers.terminate()
 
             self.resource_manager.shutdown()
-            # Re-enable the BlueZ plugins, if we have permission
-            from .backends.internal.bluez import toggle_clean_bluez
 
-            toggle_clean_bluez(False)
             # Clean up backend (e.g. reattach USB kernel drivers)
             try:
                 self.backend.shutdown()

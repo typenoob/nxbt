@@ -230,6 +230,42 @@ def toggle_clean_bluez(toggle):
     logger.debug("systemd found and bluetooth reloaded")
 
 
+def get_hci_state(hci_id):
+    """Get the up/down state of an HCI adapter via hciconfig.
+
+    :param hci_id: The HCI adapter index (e.g., 0 for hci0)
+    :return: True if adapter is UP, False if DOWN
+    :raises Exception: If hciconfig is missing or command fails
+    """
+    if which("hciconfig") is None:
+        raise Exception("hciconfig is not available on this system.")
+    result = subprocess.run(
+        ["hciconfig", f"hci{hci_id}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    output = result.stdout.decode("utf-8")
+    return "UP RUNNING" in output
+
+
+def toggle_hci_adapter(hci_id, down=True):
+    """Brings an HCI adapter down or up using hciconfig.
+    Useful for releasing/reacquiring exclusive HCI_CHANNEL_USER
+    without restarting bluetoothd.
+
+    :param hci_id: The HCI adapter index (e.g., 0 for hci0)
+    :param down: True to bring down, False to bring up
+    :raises Exception: If hciconfig is missing or command fails
+    """
+    if which("hciconfig") is None:
+        raise Exception(
+            "hciconfig is not available on this system."
+            + "If you can, please install this tool."
+        )
+    action = "down" if down else "up"
+    _run_command(["hciconfig", f"hci{hci_id}", action])
+    logger = logging.getLogger("nxbt")
+    logger.debug(f"hci{hci_id} brought {action}")
+
+
 def clean_sdp_records():
     """Cleans all SDP Records from BlueZ with sdptool
 

@@ -7,6 +7,7 @@ from .internal.bluez import (
     BlueZ,
     find_objects,
     find_devices_by_alias,
+    toggle_clean_bluez,
     SERVICE_NAME,
     ADAPTER_INTERFACE,
 )
@@ -33,6 +34,17 @@ class BlueZBackend(Backend):
         self._bt = BlueZ(adapter_path=adapter_idx)
         self._crw_running = False
         self._crw_thread = None
+
+        # Disable the BlueZ input plugin so we can use the
+        # HID control/interrupt Bluetooth ports
+
+        toggle_clean_bluez(True)
+
+    def shutdown(self):
+        """Clean up the transport, bridges, and event loop."""
+
+        # Re-enable the BlueZ plugins, if we have permission
+        toggle_clean_bluez(False)
 
     @staticmethod
     def get_available_adapters() -> list:
