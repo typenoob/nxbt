@@ -236,22 +236,28 @@ class Nxbt:
         all spun up multiprocessing Processes. This is done to
         ensure no zombie processes linger after exit.
         """
+        import signal
 
-        # Need to explicitly kill the controllers process
-        # since it isn't daemonized.
-        if hasattr(self, "controllers") and self.controllers.is_alive():
-            self.controllers.terminate()
-
-        self.resource_manager.shutdown()
-        # Re-enable the BlueZ plugins, if we have permission
-        from .backends.internal.bluez import toggle_clean_bluez
-
-        toggle_clean_bluez(False)
-        # Clean up backend (e.g. reattach USB kernel drivers)
+        # Block ^C during exit so cleanup can't be interrupted
+        old_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
-            self.backend.shutdown()
-        except Exception:
-            pass
+            # Need to explicitly kill the controllers process
+            # since it isn't daemonized.
+            if hasattr(self, "controllers") and self.controllers.is_alive():
+                self.controllers.terminate()
+
+            self.resource_manager.shutdown()
+            # Re-enable the BlueZ plugins, if we have permission
+            from .backends.internal.bluez import toggle_clean_bluez
+
+            toggle_clean_bluez(False)
+            # Clean up backend (e.g. reattach USB kernel drivers)
+            try:
+                self.backend.shutdown()
+            except Exception:
+                pass
+        finally:
+            signal.signal(signal.SIGINT, old_handler)
 
     @staticmethod
     def _command_manager(
