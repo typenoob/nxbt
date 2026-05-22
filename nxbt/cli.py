@@ -232,7 +232,7 @@ def demo(args):
 
     nx = Nxbt(
         debug=args.debug,
-        log_to_file=bool(args.logfile),
+        log_to_file=args.logfile,
         backend=backend,
         adapter_idx=adapters[0],
     )
@@ -269,7 +269,7 @@ def test(args):
     try:
         nx = Nxbt(
             debug=args.debug,
-            log_to_file=bool(args.logfile),
+            log_to_file=args.logfile,
             backend=backend,
             adapter_idx=adapters[0] if adapters else None,
         )
@@ -368,7 +368,7 @@ def macro(args):
 
     nx = Nxbt(
         debug=args.debug,
-        log_to_file=bool(args.logfile),
+        log_to_file=args.logfile,
         backend=backend,
         adapter_idx=adapter,
     )
