@@ -597,7 +597,7 @@ class Nxbt:
             if adapter_path not in self.get_available_adapters():
                 raise ValueError("Specified adapter is unavailable")
 
-            if adapter_path in self._adapters_in_use.keys():
+            if adapter_path in self._adapters_in_use:
                 raise ValueError("Specified adapter in use")
         else:
             # Get all adapters we can use
@@ -659,8 +659,8 @@ class Nxbt:
         :raises ValueError: If controller does not exist
         """
 
-        if controller_index not in self.manager_state.keys():
-            if controller_index in self._controller_adapter_lookup.keys():
+        if controller_index not in self.manager_state:
+            if controller_index in self._controller_adapter_lookup:
                 # Attempt to free any adapters claimed by a crashed controller
                 try:
                     adapter_path = self._controller_adapter_lookup.pop(
@@ -862,8 +862,7 @@ class _ControllerManager:
 
     def shutdown(self):
         # Loop over children and kill all
-        for index in self._children.keys():
-            child = self._children[index]
+        for index, child in self._children.items():
             child.terminate()
 
         self.controller_resources.shutdown()

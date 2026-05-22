@@ -58,7 +58,7 @@ class ControllerProtocol:
         """
         self.bt_address = bt_address
 
-        if controller_type in self.CONTROLLER_INFO.keys():
+        if controller_type in self.CONTROLLER_INFO:
             self.controller_type = controller_type
         else:
             raise ValueError("Unknown controller type specified")
@@ -212,7 +212,7 @@ class ControllerProtocol:
 
     def set_unknown_subcommand(self, subcommand_id):
         # Set NACK
-        self.report[14]
+        self.report[14] = 0x00
 
         # Set unknown subcommand ID
         self.report[15] = subcommand_id
@@ -573,13 +573,13 @@ class ControllerProtocol:
 
         bitfield = message.subcommand[1]
 
-        if bitfield == 0x01 or bitfield == 0x10:
+        if bitfield in (0x01, 0x10):
             self.player_number = 1
-        elif bitfield == 0x03 or bitfield == 0x30:
+        elif bitfield in (0x03, 0x30):
             self.player_number = 2
-        elif bitfield == 0x07 or bitfield == 0x70:
+        elif bitfield in (0x07, 0x70):
             self.player_number = 3
-        elif bitfield == 0x0F or bitfield == 0xF0:
+        elif bitfield in (0x0F, 0xF0):
             self.player_number = 4
 
     def set_nfc_ir_state(self):
@@ -638,7 +638,7 @@ class SwitchReportParser:
         self.subcommand_id = self.subcommand[0]
 
         # Parsing the subcommand
-        if self.subcommand[0] in self.SUBCOMMANDS.keys():
+        if self.subcommand[0] in self.SUBCOMMANDS:
             self.response = self.SUBCOMMANDS[self.subcommand[0]]
         else:
             self.response = SwitchResponses.UNKNOWN_SUBCOMMAND

@@ -7,8 +7,6 @@ import traceback
 import atexit
 import statistics as stat
 
-from nxbt.backends.bumble import BumbleBackend
-
 from .controller import ControllerTypes
 from .protocol import ControllerProtocol
 from .input import InputParser

@@ -352,7 +352,7 @@ def macro(args):
     macro = None
     if args.commands:
         if os.path.isfile(args.commands):
-            with open(args.commands, "r") as f:
+            with open(args.commands, "r", encoding="utf-8") as f:
                 macro = f.read()
         else:
             macro = args.commands

@@ -1,16 +1,15 @@
 import json
 import os
-import sys
 from threading import RLock
-import time
 from socket import gethostname
+
+import eventlet
+from flask import Flask, render_template, request
+from flask_socketio import SocketIO, emit
 
 from .cert import generate_cert
 from ..utils import load_file
 from ..nxbt import Nxbt, PRO_CONTROLLER
-from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit
-import eventlet
 
 app = Flask(
     __name__,
@@ -24,11 +23,11 @@ nxbt = Nxbt()
 secrets_path = load_file("secrets.txt", True)
 if not os.path.isfile(secrets_path):
     secret_key = os.urandom(24).hex()
-    with open(secrets_path, "w") as f:
+    with open(secrets_path, "w", encoding="utf-8") as f:
         f.write(secret_key)
 else:
     secret_key = None
-    with open(secrets_path, "r") as f:
+    with open(secrets_path, "r", encoding="utf-8") as f:
         secret_key = f.read()
 app.config["SECRET_KEY"] = secret_key
 

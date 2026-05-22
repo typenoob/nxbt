@@ -6,21 +6,21 @@ import socket
 import struct
 import threading
 import xml.etree.ElementTree as ET
+
 from bumble import hci
-
-from nxbt.bluez import toggle_clean_bluez
-
 from bumble.core import UUID
 from bumble.device import Device
 from bumble.hci import (
     Address,
     HCI_Write_Default_Link_Policy_Settings_Command,
 )
-from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.keys import JsonKeyStore
+from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport_or_link
+
+from nxbt.bluez import toggle_clean_bluez
 
 from ..controller.controller import ControllerTypes
 from ..utils import load_file

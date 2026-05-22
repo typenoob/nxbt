@@ -1,12 +1,12 @@
 import asyncio
-import subprocess
-import os
-import time
 import logging
-import threading
-from shutil import which
+import os
 import random
+import subprocess
+import threading
+import time
 from pathlib import Path
+from shutil import which
 
 from dbus_fast import BusType, Message, Variant
 from dbus_fast.aio.message_bus import MessageBus
@@ -199,7 +199,7 @@ def toggle_clean_bluez(toggle):
             # Override exist, no need to restart bluetooth
             return
 
-        with open(service_path) as f:
+        with open(service_path, encoding="utf-8") as f:
             for line in f:
                 if line.startswith("ExecStart="):
                     exec_start = line.strip() + " --compat --noplugin=*"

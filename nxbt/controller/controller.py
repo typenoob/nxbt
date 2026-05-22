@@ -1,10 +1,8 @@
-import logging
-import os
-import sys
 from enum import Enum
 
-from ..utils import load_file
 from dbus_fast import DBusError
+
+from ..utils import load_file
 
 
 class ControllerTypes(Enum):
@@ -29,7 +27,7 @@ class Controller:
         self.bt = bluetooth
         self.logger = logging.getLogger("nxbt")
 
-        if controller_type not in self.ALIASES.keys():
+        if controller_type not in self.ALIASES:
             raise ValueError("Unknown controller type specified")
         self.alias = self.ALIASES[controller_type]
 
@@ -48,7 +46,7 @@ class Controller:
         # Adding the SDP record
         sdp_record_path = load_file("sdp/switch-controller.xml")
         sdp_record = None
-        with open(sdp_record_path, "r") as f:
+        with open(sdp_record_path, "r", encoding="utf-8") as f:
             sdp_record = f.read()
 
         opts = {

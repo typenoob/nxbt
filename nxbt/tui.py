@@ -1,9 +1,10 @@
+import multiprocessing
 import os
 import time
-import psutil
 from collections import deque
-import multiprocessing
 from sys import exit
+
+import psutil
 
 from blessed import Terminal
 
@@ -77,7 +78,7 @@ class ControllerTUI:
         self.DEFAULT_CONTROLS = self.CONTROLS.copy()
 
         self.CONTROL_RELEASE_TIMERS = self.CONTROLS.copy()
-        for control in self.CONTROL_RELEASE_TIMERS.keys():
+        for control in self.CONTROL_RELEASE_TIMERS:
             self.CONTROL_RELEASE_TIMERS[control] = False
 
         self.auto_keypress_deactivation = True
@@ -120,8 +121,7 @@ class ControllerTUI:
     def render_controller(self):
         if self.auto_keypress_deactivation:
             # Release any overdue timers
-            for control in self.CONTROL_RELEASE_TIMERS.keys():
-                pressed_time = self.CONTROL_RELEASE_TIMERS[control]
+            for control, pressed_time in self.CONTROL_RELEASE_TIMERS.items():
                 current_time = time.perf_counter()
                 if pressed_time is not False and current_time - pressed_time > 0.25:
                     self.deactivate_control(control)
@@ -297,7 +297,7 @@ class InputTUI:
         # Check if direct connection will fail
         if not self.remote_connection:
             try:
-                from pynput import keyboard
+                import pynput  # pylint: disable=unused-import
             except ImportError as e:
                 print("Unable to import pynput for direct input.")
                 print("If you're accessing NXBT over a remote shell, ", end="")
@@ -443,7 +443,7 @@ class InputTUI:
                     control_data = self.KEYMAP[pressed_key]
                     if (
                         type(control_data) == dict
-                        and "stick_data" in control_data.keys()
+                        and "stick_data" in control_data
                     ):
                         x_value = control_data["stick_data"]["x"]
                         y_value = control_data["stick_data"]["y"]
@@ -500,7 +500,7 @@ class InputTUI:
                     packet = input_packet["packet"]
                     if (
                         type(control_data) == dict
-                        and "stick_data" in control_data.keys()
+                        and "stick_data" in control_data
                     ):
                         stick_name = control_data["stick_data"]["stick_name"]
                         self.controller.activate_control(control_data["control"])
@@ -537,7 +537,7 @@ class InputTUI:
                     packet = input_packet["packet"]
                     if (
                         type(control_data) == dict
-                        and "stick_data" in control_data.keys()
+                        and "stick_data" in control_data
                     ):
                         stick_name = control_data["stick_data"]["stick_name"]
                         self.controller.deactivate_control(control_data["control"])
