@@ -19,18 +19,15 @@ def create_logger(debug=False, log_to_file=False, disable_logging=False):
             if isinstance(log_to_file, str)
             else f"./nxbt {datetime.now()}.log"
         )
-        nxbt_handler = logging.FileHandler(log_filename)
-        nxbt_handler.setFormatter(
+        file_handler = logging.FileHandler(log_filename)
+        file_handler.setFormatter(
             logging.Formatter("[%(asctime)s] %(levelname)s in %(module)s: %(message)s")
         )
-        logger.addHandler(nxbt_handler)
-        # Bumble uses its own ColorFormatter for the same file
-        from bumble.logging import ColorFormatter
-
-        bumble_handler = logging.FileHandler(log_filename)
-        bumble_handler.setFormatter(ColorFormatter())
-        logging.getLogger("bumble").addHandler(bumble_handler)
-        logging.getLogger("bumble").setLevel(logging.DEBUG if debug else logging.INFO)
+        logger.addHandler(file_handler)
+        bumble_logger = logging.getLogger("bumble")
+        bumble_logger.addHandler(file_handler)
+        bumble_logger.setLevel(logging.DEBUG if debug else logging.INFO)
+        bumble_logger.propagate = False
     else:
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(

@@ -216,17 +216,27 @@ class BumbleBackend(Backend):
         """Scan for HCI adapters via HCI sockets or USB."""
         adapters = []
 
-        for idx in range(8):
-            try:
-                import os
+        import glob
+        import os
 
-                for entry in os.listdir("/sys/class/bluetooth/"):
-                    if entry.startswith("hci"):
-                        idx = entry.replace("hci", "")
-                        adapters.append(f"hci-socket:{idx}")
-            except Exception as e:
-                pass
-
+        for entry in os.listdir("/sys/class/bluetooth/"):
+            if not entry.startswith("hci"):
+                continue
+            idx = entry.replace("hci", "")
+            # Check rfkill state — adapter must not be soft or hard blocked
+            blocked = False
+            for rfkill_state in glob.glob(
+                f"/sys/class/bluetooth/{entry}/rfkill*/state"
+            ):
+                try:
+                    with open(rfkill_state) as f:
+                        if f.read().strip() == "0":
+                            blocked = True
+                            break
+                except OSError:
+                    pass
+            if not blocked:
+                adapters.append(f"hci-socket:{idx}")
         # Scan for USB Bluetooth adapters as fallback
         try:
             import usb.core
@@ -292,6 +302,8 @@ class BumbleBackend(Backend):
         if self._transport_spec.startswith("hci"):
             self._hci_old_state = get_hci_state(self._transport_idx)
             toggle_hci_adapter(self._transport_idx)
+        else:
+            self._hci_old_state = None
 
     @property
     def address(self) -> str:
@@ -355,14 +367,16 @@ class BumbleBackend(Backend):
                 self.logger.debug(f"Could not find USB device for cleanup: {e}")
             for cfg in usb_device:
                 for intf in cfg:
+                    if usb_device.is_kernel_driver_active(intf.bInterfaceNumber):
+                        continue
                     try:
-                        if not usb_device.is_kernel_driver_active(
-                            intf.bInterfaceNumber
-                        ):
-                            usb_device.attach_kernel_driver(intf.bInterfaceNumber)
-                            self.logger.debug(
-                                f"Reattached kernel driver to interface {intf.bInterfaceNumber}"
-                            )
+                        import time
+
+                        time.sleep(0.01)  # Avoid resource busy
+                        usb_device.attach_kernel_driver(intf.bInterfaceNumber)
+                        self.logger.debug(
+                            f"Reattached kernel driver to interface {intf.bInterfaceNumber}"
+                        )
                     except Exception as e:
                         pass
             self.logger.debug("USB kernel drivers reattached")
@@ -371,7 +385,8 @@ class BumbleBackend(Backend):
 
     def shutdown(self):
         """Clean up the transport, bridges, and event loop."""
-        toggle_hci_adapter(self._transport_idx, self._hci_old_state)
+        if self._hci_old_state:
+            toggle_hci_adapter(self._transport_idx, self._hci_old_state)
         self._stop_event_loop()
         self._reattach_usb_drivers()
 
