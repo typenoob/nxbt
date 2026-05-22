@@ -3,11 +3,9 @@ import logging
 import queue
 import select
 import socket
-import struct
 import threading
 import xml.etree.ElementTree as ET
 
-from bumble import hci
 from bumble.core import UUID
 from bumble.device import Device
 from bumble.hci import (
