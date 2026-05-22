@@ -66,9 +66,7 @@ class BlueZBackend(Backend):
         }
 
         try:
-            self._bt.register_profile(
-                self.SDP_RECORD_PATH, self.SDP_UUID, opts
-            )
+            self._bt.register_profile(self.SDP_RECORD_PATH, self.SDP_UUID, opts)
         except Exception as e:
             self.logger.debug(e)
 

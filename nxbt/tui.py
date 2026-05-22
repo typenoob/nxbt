@@ -441,10 +441,7 @@ class InputTUI:
             else:
                 try:
                     control_data = self.KEYMAP[pressed_key]
-                    if (
-                        type(control_data) == dict
-                        and "stick_data" in control_data
-                    ):
+                    if type(control_data) == dict and "stick_data" in control_data:
                         x_value = control_data["stick_data"]["x"]
                         y_value = control_data["stick_data"]["y"]
                         stick_name = control_data["stick_data"]["stick_name"]
@@ -498,10 +495,7 @@ class InputTUI:
                 try:
                     control_data = self.KEYMAP[pressed_key]
                     packet = input_packet["packet"]
-                    if (
-                        type(control_data) == dict
-                        and "stick_data" in control_data
-                    ):
+                    if type(control_data) == dict and "stick_data" in control_data:
                         stick_name = control_data["stick_data"]["stick_name"]
                         self.controller.activate_control(control_data["control"])
                         packet[stick_name][control_data["control"]] = True
@@ -535,10 +529,7 @@ class InputTUI:
                 try:
                     control_data = self.KEYMAP[released_key]
                     packet = input_packet["packet"]
-                    if (
-                        type(control_data) == dict
-                        and "stick_data" in control_data
-                    ):
+                    if type(control_data) == dict and "stick_data" in control_data:
                         stick_name = control_data["stick_data"]["stick_name"]
                         self.controller.deactivate_control(control_data["control"])
                         packet[stick_name][control_data["control"]] = False

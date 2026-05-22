@@ -17,7 +17,11 @@ def mock_bluetooth_adapters():
     with pytest.MonkeyPatch.context() as m:
         from nxbt.backends import BumbleBackend
 
-        m.setattr(BumbleBackend, "get_available_adapters", staticmethod(lambda: ["hci-socket:0"]))
+        m.setattr(
+            BumbleBackend,
+            "get_available_adapters",
+            staticmethod(lambda: ["hci-socket:0"]),
+        )
         yield m
 
 
