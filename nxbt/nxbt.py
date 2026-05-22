@@ -12,7 +12,7 @@ import json
 
 from .controller import ControllerServer
 from .controller import ControllerTypes
-from .bluez import toggle_clean_bluez
+from .backends.internal.bluez import toggle_clean_bluez
 from .backends import BumbleBackend
 from .logging import create_logger
 
@@ -241,7 +241,6 @@ class Nxbt:
             self.controllers.terminate()
 
         self.resource_manager.shutdown()
-
         # Re-enable the BlueZ plugins, if we have permission
         toggle_clean_bluez(False)
 

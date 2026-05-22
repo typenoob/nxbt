@@ -20,8 +20,6 @@ from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport_or_link
 
-from nxbt.bluez import toggle_clean_bluez
-
 from ..controller.controller import ControllerTypes
 from ..utils import load_file
 from .base import Backend
@@ -230,6 +228,7 @@ class BumbleBackend(Backend):
     @staticmethod
     def get_available_adapters() -> list[str]:
         """Scan for HCI adapters via HCI sockets or USB."""
+        from .internal.bluez import toggle_clean_bluez
         toggle_clean_bluez(True)
         adapters = []
 

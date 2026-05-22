@@ -3,7 +3,7 @@ import socket
 import time
 from threading import Thread
 
-from ..bluez import (
+from .internal.bluez import (
     BlueZ,
     find_objects,
     find_devices_by_alias,
