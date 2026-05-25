@@ -451,6 +451,10 @@ class BumbleBackend(Backend):
 
     def _setup_async(self, controller_type):
         """Async setup of the Bumble device."""
+        if self._transport_spec.startswith("hci") and get_hci_state(
+            self._transport_idx
+        ):
+            toggle_hci_adapter(self._transport_idx)
         # Open transport
         self._transport = self._run_async(open_transport_or_link(self._transport_spec))
 
