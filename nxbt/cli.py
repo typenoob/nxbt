@@ -431,6 +431,7 @@ def main(args=None):
             usessl=args.usessl,
             cert_path=args.certpath,
             debug=args.debug,
+            backend=args.backend,
         )
     elif args.command == "demo":
         demo(args)

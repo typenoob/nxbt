@@ -10,6 +10,7 @@ from flask_socketio import SocketIO, emit
 from .cert import generate_cert
 from ..utils import load_file
 from ..nxbt import Nxbt, PRO_CONTROLLER
+from ..backends import BACKENDS
 
 app = Flask(
     __name__,
@@ -110,9 +111,11 @@ def handle_macro(message):
     nxbt.macro(index, macro)
 
 
-def start_web_app(ip="0.0.0.0", port=8000, usessl=False, cert_path=None, debug=False):
+def start_web_app(
+    ip="0.0.0.0", port=8000, usessl=False, cert_path=None, debug=False, backend="bumble"
+):
     global nxbt
-    nxbt = Nxbt(debug=debug)
+    nxbt = Nxbt(debug=debug, backend=BACKENDS[backend]())
     if usessl:
         if cert_path is None:
             # Store certs in the package directory
