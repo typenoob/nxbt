@@ -113,7 +113,7 @@ class ControllerServer:
                     self.logger.debug(f"Failed to remove bond from {name}: {e}")
 
             self.state["state"] = "connected"
-
+            self.input.buffer_macro("A 0.1s", os.urandom(24).hex())
             self.mainloop(itr, ctrl)
 
         except KeyboardInterrupt:
@@ -332,7 +332,6 @@ class ControllerServer:
             except OSError as e:
                 self.logger.debug(e)
 
-        self.input.exited_grip_order_menu = False
         return itr, ctrl
 
     def reconnect(self, reconnect_address):
