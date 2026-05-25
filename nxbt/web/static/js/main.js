@@ -11,6 +11,7 @@ let STATE = false;
 let HTML_CONTROLLER_SELECTION = document.getElementById("controller-selection");
 let HTML_LOADER = document.getElementById("loader");
 let HTML_LOADER_TEXT = document.getElementById("loader-text");
+let HTML_LOADER_RECREATE_WRAPPER = document.getElementById("loader-recreate-wrapper");
 let HTML_CONTROLLER_CONFIG = document.getElementById("controller-config");
 let HTML_MACRO_TEXT = document.getElementById("macro-text");
 let HTML_STATUS_INDICATOR = document.getElementById("status-indicator");
@@ -380,6 +381,10 @@ function displayError(errorText) {
 function createProController() {
     HTML_CONTROLLER_SELECTION.classList.add('hidden');
     HTML_LOADER.classList.remove('hidden');
+    HTML_LOADER_RECREATE_WRAPPER.classList.add('hidden');
+    HTML_ERROR_DISPLAY.classList.add('hidden');
+    HTML_ERROR_DISPLAY.innerHTML = "";
+    HTML_LOADER_TEXT.innerHTML = "Loading";
 
     socket.emit('web_create_pro_controller');
 }
@@ -396,6 +401,10 @@ function recreateProController() {
 
 function restartController() {
     shutdownController();
+    HTML_LOADER_RECREATE_WRAPPER.classList.add('hidden');
+    HTML_ERROR_DISPLAY.classList.add('hidden');
+    HTML_ERROR_DISPLAY.innerHTML = "";
+    HTML_LOADER_TEXT.innerHTML = "Loading";
     setTimeout(recreateProController, 2000);
 }
 
@@ -414,6 +423,14 @@ function checkForLoad() {
                 setInterval(updateStatusIndicator, 1000);
                 eventLoop();
             }, 1000);
+        } else if (controller_state === ControllerState.CRASHED) {
+            clearInterval(checkForLoadInterval);
+            HTML_LOADER_TEXT.innerHTML = "Failed to connect";
+            HTML_LOADER_RECREATE_WRAPPER.classList.remove('hidden');
+            if (STATE[NXBT_CONTROLLER_INDEX].errors) {
+                HTML_ERROR_DISPLAY.innerHTML = STATE[NXBT_CONTROLLER_INDEX].errors;
+                HTML_ERROR_DISPLAY.classList.remove('hidden');
+            }
         }
     }
 }

@@ -645,10 +645,16 @@ class Nxbt:
                 while True:
                     if controller_index in self.manager_state.keys():
                         state = self.manager_state[controller_index]
+                        if state["state"] == "crashed":
+                            # Free the adapter since setup failed
+                            self._adapters_in_use.pop(adapter_path, None)
+                            self._controller_adapter_lookup.pop(controller_index, None)
+                            raise OSError(
+                                f"Controller setup failed: {state.get('errors', 'unknown error')}"
+                            )
                         if (
                             state["state"] == "connecting"
                             or state["state"] == "reconnecting"
-                            or state["state"] == "crashed"
                         ):
                             break
 
@@ -693,6 +699,15 @@ class Nxbt:
                 },
             }
         )
+
+        # Block until the controller is actually removed from shared state.
+        # This ensures the child process has terminated and freed HCI resources
+        # before the caller proceeds (e.g., creating a new controller).
+        deadline = time.monotonic() + 10
+        while controller_index in self.manager_state:
+            if time.monotonic() > deadline:
+                break
+            time.sleep(1 / 30)
 
     def wait_for_connection(self, controller_index):
         """Blocks until a given controller is connected
@@ -810,7 +825,6 @@ class _ControllerManager:
         to reconnect to, defaults to None
         :type reconnect_address: str, optional
         """
-
         controller_queue = Queue()
 
         controller_state = self.controller_resources.dict()
@@ -827,7 +841,6 @@ class _ControllerManager:
         self._controller_queues[index] = controller_queue
 
         self.state[index] = controller_state
-
         server = ControllerServer(
             controller_type,
             backend=self.backend,
@@ -837,7 +850,6 @@ class _ControllerManager:
             colour_body=colour_body,
             colour_buttons=colour_buttons,
         )
-
         controller = Process(target=server.run, args=(reconnect_address,))
         controller.daemon = True
         self._children[index] = controller

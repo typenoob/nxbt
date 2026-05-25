@@ -17,7 +17,7 @@ app = Flask(
     template_folder=load_file("templates"),
     static_folder=load_file("static"),
 )
-nxbt = Nxbt()
+nxbt = None
 
 # Configuring/retrieving secret key
 secrets_path = load_file("secrets.txt", True)
@@ -67,6 +67,8 @@ def on_disconnect():
             nxbt.remove_controller(index)
         except KeyError:
             pass
+        except (ValueError, OSError):
+            pass
 
 
 @sio.on("shutdown")
@@ -83,7 +85,6 @@ def on_create_controller():
         index = nxbt.create_controller(
             PRO_CONTROLLER, reconnect_address=reconnect_addresses
         )
-
         with user_info_lock:
             USER_INFO[request.sid]["controller_index"] = index
 
@@ -109,7 +110,9 @@ def handle_macro(message):
     nxbt.macro(index, macro)
 
 
-def start_web_app(ip="0.0.0.0", port=8000, usessl=False, cert_path=None):
+def start_web_app(ip="0.0.0.0", port=8000, usessl=False, cert_path=None, debug=False):
+    global nxbt
+    nxbt = Nxbt(debug=debug)
     if usessl:
         if cert_path is None:
             # Store certs in the package directory

@@ -430,6 +430,7 @@ def main(args=None):
             port=args.port,
             usessl=args.usessl,
             cert_path=args.certpath,
+            debug=args.debug,
         )
     elif args.command == "demo":
         demo(args)
