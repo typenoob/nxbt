@@ -28,6 +28,19 @@ class Backend(ABC):
     def reconnect(self, address) -> tuple:
         """Reconnect to a known address. Returns (itr_socket, ctrl_socket)."""
 
+    @abstractmethod
+    def remove_bonded_device(self, address):
+        """Remove a bonded Nintendo Switch device from the host's Bluetooth bond list.
+
+        This forgets the pairing keys associated with *address*, allowing the
+        Switch to re-initiate a fresh bonding handshake on the next connection
+        attempt. Use this when the Switch fails to reconnect or reports a
+        pairing/bonding error.
+
+        Args:
+            address: The Bluetooth MAC address of the Switch to unpair.
+        """
+
     @staticmethod
     def get_available_adapters() -> list:
         """Return a list of available adapter identifiers."""

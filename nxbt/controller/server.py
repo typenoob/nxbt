@@ -7,6 +7,8 @@ import traceback
 import atexit
 import statistics as stat
 
+from ..backends import BACKENDS
+
 from .controller import ControllerTypes
 from .protocol import ControllerProtocol
 from .input import InputParser
@@ -88,7 +90,6 @@ class ControllerServer:
                 self.lock.acquire()
             try:
                 self.backend.setup(self.controller_type)
-
                 if reconnect_address:
                     try:
                         itr, ctrl = self.reconnect(reconnect_address)
@@ -99,9 +100,17 @@ class ControllerServer:
             finally:
                 if self.lock:
                     self.lock.release()
-
-            self.switch_address = itr.getpeername()[0]
+            self.switch_address = itr.getpeername()[0].replace("/P", "")
             self.state["last_connection"] = self.switch_address
+            # Clean up stale bonds on other backends so they don't
+            # interfere with future connections.
+            for name, backend_cls in BACKENDS.items():
+                if type(self.backend) is backend_cls:
+                    continue
+                try:
+                    backend_cls().remove_bonded_device(self.switch_address)
+                except Exception as e:
+                    self.logger.debug(f"Failed to remove bond from {name}: {e}")
 
             self.state["state"] = "connected"
 

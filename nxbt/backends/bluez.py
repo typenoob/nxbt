@@ -1,4 +1,6 @@
 import logging
+import shutil
+from pathlib import Path
 import socket
 import time
 from threading import Thread
@@ -155,6 +157,19 @@ class BlueZBackend(Backend):
             "Unable to reconnect to sockets at the given address(es)",
             reconnect_address,
         )
+
+    def remove_bonded_device(self, address):
+        bt_dir = Path("/var/lib/bluetooth")
+        if not bt_dir.exists():
+            return
+
+        # Find adapter dirs
+        for adapter_dir in bt_dir.iterdir():
+            device_path = adapter_dir / address.upper()
+            if device_path.exists():
+                shutil.rmtree(device_path)
+                logging.getLogger("nxbt").info(f"Removed bonded device {address}")
+                break
 
     def _connection_reset_watchdog(self):
         bonded = set(self._bt.find_bonded_devices_by_alias("Nintendo Switch"))

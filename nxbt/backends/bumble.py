@@ -8,10 +8,7 @@ import xml.etree.ElementTree as ET
 
 from bumble.core import UUID
 from bumble.device import Device
-from bumble.hci import (
-    Address,
-    HCI_Write_Default_Link_Policy_Settings_Command,
-)
+from bumble.hci import HCI_Write_Default_Link_Policy_Settings_Command
 from bumble.keys import JsonKeyStore
 from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.pairing import PairingConfig, PairingDelegate
@@ -250,25 +247,15 @@ class BumbleBackend(Backend):
 
     @staticmethod
     def get_switch_addresses() -> list[str]:
-        """Read bonded peer addresses from the JsonKeyStore file."""
-        keystore = JsonKeyStore()
-        import json
-        import os
+        async def _collect():
+            addresses = []
+            for path in JsonKeyStore().directory_name.iterdir():
+                keystore = JsonKeyStore(None, str(path))
+                entries = await keystore.get_all()
+                addresses += [entry[0].replace("/P", "") for entry in entries]
+            return addresses
 
-        if not os.path.exists(keystore.filename):
-            return []
-        try:
-            with open(keystore.filename, "r", encoding="utf-8") as f:
-                db = json.load(f)
-        except Exception:
-            return []
-        # Try the namespace first, then fall back to single-namespace or default
-        key_map = db.get(keystore.namespace)
-        if key_map is None and len(db) == 1:
-            key_map = next(iter(db.values()))
-        if key_map is None and keystore.namespace == JsonKeyStore.DEFAULT_NAMESPACE:
-            key_map = db.get(JsonKeyStore.DEFAULT_NAMESPACE, {})
-        return [k for k in key_map] if key_map else []
+        return asyncio.run(_collect())
 
     def __init__(
         self,
@@ -298,12 +285,6 @@ class BumbleBackend(Backend):
         self._transport = None
         # Store controller type for device reset
         self._pending_controller_type = None
-
-        if self._transport_spec.startswith("hci"):
-            self._hci_old_state = get_hci_state(self._transport_idx)
-            toggle_hci_adapter(self._transport_idx)
-        else:
-            self._hci_old_state = None
 
     @property
     def address(self) -> str:
@@ -359,11 +340,13 @@ class BumbleBackend(Backend):
             try:
                 usb_idx = int(self._transport_spec.split(":")[1])
                 devices = list(usb.core.find(find_all=True, bDeviceClass=0xE0))
-                print(f"usb_idx={usb_idx}, devices_found={len(devices)}")
+                self.logger.debug(
+                    f"USB cleanup: usb_idx={usb_idx}, devices_found={len(devices)}"
+                )
                 if usb_idx < len(devices):
                     usb_device = devices[usb_idx]
             except Exception as e:
-                print(f"[{id(self)}] USB exception: {e}")
+                self.logger.debug(f"USB device lookup failed: {e}")
                 self.logger.debug(f"Could not find USB device for cleanup: {e}")
             for cfg in usb_device:
                 for intf in cfg:
@@ -454,6 +437,7 @@ class BumbleBackend(Backend):
         if self._transport_spec.startswith("hci") and get_hci_state(
             self._transport_idx
         ):
+            self._hci_old_state = get_hci_state(self._transport_idx)
             toggle_hci_adapter(self._transport_idx)
         # Open transport
         self._transport = self._run_async(open_transport_or_link(self._transport_spec))
@@ -630,6 +614,28 @@ class BumbleBackend(Backend):
             "Unable to reconnect to channels at the given address(es)",
             reconnect_address,
         )
+
+    def remove_bonded_device(self, address):
+        """Remove pairing keys for *address* from the JsonKeyStore file."""
+
+        async def _del():
+            import json
+
+            dir_path = JsonKeyStore().directory_name
+            for file_path in dir_path.iterdir():
+                with open(file_path, "r") as f:
+                    data = json.load(f)
+                for namespace in data:
+                    keystore = JsonKeyStore(namespace, str(file_path))
+                    try:
+                        await keystore.delete(address + "/P")
+                        self.logger.debug(
+                            f"Removed bonded device {address} from keystore {file_path}"
+                        )
+                    except KeyError:
+                        pass
+
+        return asyncio.run(_del())
 
     def __del__(self):
         self._stop_event_loop()
