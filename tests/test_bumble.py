@@ -41,8 +41,7 @@ class TestBumbleBackendSetupHciToggle:
         _mock_keystore,
         mock_open_transport,
     ):
-        """When HCI adapter is UP, toggle_hci_adapter is called during _setup_async
-        in addition to __init__, so total calls should be 2."""
+        """When HCI adapter is UP, _setup_async calls toggle_hci_adapter once."""
         mock_get_hci_state.return_value = True
         mock_device.with_hci.return_value = MagicMock(
             public_address="AA:BB:CC:DD:EE:FF",
@@ -59,9 +58,9 @@ class TestBumbleBackendSetupHciToggle:
         backend._build_sdp_record = MagicMock(return_value=[])
         backend.setup(PRO_CONTROLLER)
 
-        # __init__ calls toggle once; _setup_async calls toggle when adapter is UP
-        assert mock_toggle.call_count == 2, (
-            f"Expected 2 toggle calls (__init__ + _setup_async), got {mock_toggle.call_count}"
+        # Only _setup_async calls toggle when adapter is UP
+        assert mock_toggle.call_count == 1, (
+            f"Expected 1 toggle call (_setup_async), got {mock_toggle.call_count}"
         )
 
     @patch("nxbt.backends.bumble.open_transport_or_link")
@@ -77,8 +76,7 @@ class TestBumbleBackendSetupHciToggle:
         _mock_keystore,
         mock_open_transport,
     ):
-        """When HCI adapter is already DOWN, _setup_async does NOT call toggle
-        — only __init__ calls it, so total is 1."""
+        """When HCI adapter is already DOWN, _setup_async does NOT call toggle."""
         mock_get_hci_state.return_value = False
         mock_device.with_hci.return_value = MagicMock(
             public_address="AA:BB:CC:DD:EE:FF",
@@ -95,9 +93,9 @@ class TestBumbleBackendSetupHciToggle:
         backend._build_sdp_record = MagicMock(return_value=[])
         backend.setup(PRO_CONTROLLER)
 
-        # Only __init__ calls toggle; _setup_async skips it since adapter is DOWN
-        assert mock_toggle.call_count == 1, (
-            f"Expected 1 toggle call (__init__ only), got {mock_toggle.call_count}"
+        # Neither __init__ nor _setup_async calls toggle when adapter is DOWN
+        assert mock_toggle.call_count == 0, (
+            f"Expected 0 toggle calls, got {mock_toggle.call_count}"
         )
 
     @patch("nxbt.backends.bumble.open_transport_or_link")

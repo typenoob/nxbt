@@ -51,7 +51,12 @@ def test_help(capsys):
 def test_webapp_command(mock_start_web_app):
     main(["webapp", "-i", "127.0.0.1", "-p", "5000", "--usessl"])
     mock_start_web_app.assert_called_once_with(
-        ip="127.0.0.1", port=5000, usessl=True, cert_path=None, debug=False
+        ip="127.0.0.1",
+        port=5000,
+        usessl=True,
+        cert_path=None,
+        debug=False,
+        backend="bumble",
     )
 
 
