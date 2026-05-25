@@ -143,4 +143,4 @@ def test_logging_flags_custom(mock_nxbt):
 
     main(["demo", "--logfile", "custom.log"])
     call_kwargs = mock_nxbt.call_args[1]
-    assert call_kwargs["log_to_file"] is True
+    assert call_kwargs["log_to_file"] == "custom.log"

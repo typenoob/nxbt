@@ -23,7 +23,6 @@ class TestNxbt:
         with (
             patch("nxbt.nxbt.Process") as mock_process,
             patch("nxbt.nxbt.Manager") as mock_manager,
-            patch("nxbt.nxbt.toggle_clean_bluez"),
         ):
             mock_manager_instance = mock_manager.return_value
             mock_manager_instance.dict.return_value = {}
@@ -45,7 +44,6 @@ class TestNxbt:
         with (
             patch("nxbt.nxbt.Process"),
             patch("nxbt.nxbt.Manager"),
-            patch("nxbt.nxbt.toggle_clean_bluez"),
         ):
             nx = Nxbt(disable_logging=True, backend=mock_backend)
             with pytest.raises(ValueError, match="No adapters available"):
