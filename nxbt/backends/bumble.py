@@ -458,17 +458,16 @@ class BumbleBackend(Backend):
         # Open transport
         self._transport = self._run_async(open_transport_or_link(self._transport_spec))
 
-        # Create device
-        addr = str(Address("00:00:00:00:00:00"))
+        # Create device — use the HCI adapter's real public address
         self._device = Device.with_hci(
             self.ALIASES[controller_type],
-            Address(addr),
+            None,
             self._transport.source,
             self._transport.sink,
         )
 
         # Configure Classic Bluetooth
-        self._device.keystore = JsonKeyStore()
+        self._device.config.keystore = "JsonKeyStore"
         self._device.classic_enabled = True
         self._device.class_of_device = 0x002508  # Gamepad
         self._device.discoverable = True
