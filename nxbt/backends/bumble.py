@@ -239,10 +239,9 @@ class BumbleBackend(Backend):
             import usb.core
 
             for idx, _ in enumerate(usb.core.find(find_all=True, bDeviceClass=0xE0)):
-                adapters.append(f"usb:{idx}")
+                adapters.append(f"pyusb:{idx}")
         except Exception:
             pass
-
         return adapters
 
     @staticmethod
@@ -332,7 +331,7 @@ class BumbleBackend(Backend):
 
     def _reattach_usb_drivers(self):
         """Reattach kernel drivers on USB interfaces we claimed."""
-        if not self._transport_spec.startswith("usb:"):
+        if not self._transport_spec.startswith("pyusb:"):
             return
         try:
             import usb.core
