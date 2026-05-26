@@ -1,5 +1,6 @@
 import fcntl
 import os
+import signal
 import time
 import queue
 import logging
@@ -78,6 +79,7 @@ class ControllerServer:
         """
 
         self.state["state"] = "initializing"
+        signal.signal(signal.SIGTERM, self._on_exit)
 
         try:
             # If we have a lock, prevent other controllers
@@ -123,11 +125,6 @@ class ControllerServer:
             except Exception as e:
                 self.logger.debug("Error during graceful shutdown:")
                 self.logger.debug(traceback.format_exc())
-        finally:
-            try:
-                self.backend.shutdown()
-            except Exception:
-                pass
 
     def mainloop(self, itr, ctrl):
         duration_start = time.perf_counter()
@@ -348,3 +345,12 @@ class ControllerServer:
         self.protocol.process_commands(None)
         itr.sendall(self.protocol.get_report())
         return itr, ctrl
+
+    def _on_exit(self, signum, frame):
+        try:
+            self.backend.shutdown()
+        except Exception:
+            pass
+        import sys
+
+        sys.exit(0)
