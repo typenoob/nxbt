@@ -32,7 +32,6 @@ import socket
 import sys
 import os
 import time
-import fcntl
 from time import perf_counter
 
 from nxbt import toggle_clean_bluez
@@ -232,7 +231,7 @@ if __name__ == "__main__":
         print("Got Switch Interrupt Client Connection")
 
         # Creating a non-blocking client interrupt connection
-        fcntl.fcntl(client_interrupt, fcntl.F_SETFL, os.O_NONBLOCK)
+        client_interrupt.setblocking(False)
 
         # Initial Input report from Joy-Con
         jc_data = jc_itr.recv(350)

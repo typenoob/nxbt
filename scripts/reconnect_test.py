@@ -24,7 +24,6 @@ import socket
 import sys
 import os
 import time
-import fcntl
 
 from nxbt import toggle_clean_bluez
 from nxbt import BlueZ
@@ -153,7 +152,7 @@ if __name__ == "__main__":
         print("Got Socket Connection")
 
         # Creating a non-blocking client interrupt connection
-        fcntl.fcntl(switch_itr, fcntl.F_SETFL, os.O_NONBLOCK)
+        switch_itr.setblocking(False)
 
         print("Connecting to Switch...")
         while True:

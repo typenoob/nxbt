@@ -324,12 +324,8 @@ class ControllerServer:
                 itr, ctrl = self.backend.accept()
                 self.protocol.process_commands(None)
                 itr.sendall(self.protocol.get_report())
-                try:
-                    import fcntl
+                itr.setblocking(False)
 
-                    fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
-                except ModuleNotFoundError:
-                    pass
                 self._run_pairing_handshake(itr)
                 break
             except OSError as e:
@@ -345,12 +341,7 @@ class ControllerServer:
         """
         self.state["state"] = "reconnecting"
         itr, ctrl = self.backend.reconnect(reconnect_address)
-        try:
-            import fcntl
-
-            fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
-        except ModuleNotFoundError:
-            pass
+        itr.setblocking(False)
         self.protocol.process_commands(None)
         itr.sendall(self.protocol.get_report())
         return itr, ctrl
