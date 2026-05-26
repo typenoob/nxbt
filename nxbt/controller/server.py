@@ -7,6 +7,7 @@ import traceback
 import statistics as stat
 
 from ..backends import BACKENDS
+from ..logging import create_logger
 
 from .controller import ControllerTypes
 from .protocol import ControllerProtocol
@@ -24,7 +25,12 @@ class ControllerServer:
         lock=None,
         colour_body=None,
         colour_buttons=None,
+        debug=False,
+        log_to_file=False,
     ):
+        self._debug = debug
+        self._log_to_file = log_to_file
+
         self.logger = logging.getLogger("nxbt")
         # Cache logging level to increase performance on checks
         self.logger_level = self.logger.level
@@ -76,6 +82,10 @@ class ControllerServer:
         previously connected to Nintendo Switch, defaults to None
         :type reconnect_address: string or list, optional
         """
+
+        create_logger(debug=self._debug, log_to_file=self._log_to_file)
+        self.logger = logging.getLogger("nxbt")
+        self.logger_level = self.logger.level
 
         self.state["state"] = "initializing"
         signal.signal(signal.SIGTERM, self._on_exit)

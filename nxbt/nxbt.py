@@ -157,6 +157,7 @@ class Nxbt:
         """
 
         self.debug = debug
+        self.log_to_file = log_to_file
         self.logger = create_logger(
             debug=self.debug, log_to_file=log_to_file, disable_logging=disable_logging
         )
@@ -209,6 +210,8 @@ class Nxbt:
                 self._bluetooth_lock,
                 self._backend_cls,
                 self._backend_kwargs(),
+                self.debug,
+                self.log_to_file,
             ),
         )
         # Disabling daemonization since we need to spawn
@@ -256,7 +259,13 @@ class Nxbt:
 
     @staticmethod
     def _command_manager(
-        task_queue, state, bluetooth_lock, backend_cls, backend_kwargs=None
+        task_queue,
+        state,
+        bluetooth_lock,
+        backend_cls,
+        backend_kwargs=None,
+        debug=False,
+        log_to_file=False,
     ):
         """Used as the main multiprocessing Process that is launched
         on startup to handle the message passing and instantiation of
@@ -272,6 +281,8 @@ class Nxbt:
         :param bluetooth_lock: A lock to synchronize Bluetooth actions
         :param backend_cls: Backend subclass to instantiate
         :param backend_kwargs: Backend-specific constructor kwargs
+        :param debug: Enable debug logging
+        :param log_to_file: Enable logging to file
         """
 
         backend = backend_cls(**(backend_kwargs or {}))
@@ -299,6 +310,8 @@ class Nxbt:
                                 msg["arguments"]["colour_body"],
                                 msg["arguments"]["colour_buttons"],
                                 msg["arguments"]["reconnect_address"],
+                                debug=debug,
+                                log_to_file=log_to_file,
                             )
                         except Exception:
                             idx = msg["arguments"]["controller_index"]
@@ -808,6 +821,8 @@ class _ControllerManager:
         colour_body=None,
         colour_buttons=None,
         reconnect_address=None,
+        debug=False,
+        log_to_file=False,
     ):
         """Instantiates a given controller as a multiprocessing
         Process with a shared state dict and a task queue.
@@ -830,6 +845,8 @@ class _ControllerManager:
         :param reconnect_address: The address of a Nintendo Switch
         to reconnect to, defaults to None
         :type reconnect_address: str, optional
+        :param debug: Enable debug logging
+        :param log_to_file: Enable logging to file
         """
         controller_queue = Queue()
 
@@ -855,6 +872,8 @@ class _ControllerManager:
             task_queue=controller_queue,
             colour_body=colour_body,
             colour_buttons=colour_buttons,
+            debug=debug,
+            log_to_file=log_to_file,
         )
         controller = Process(target=server.run, args=(reconnect_address,))
         controller.daemon = True

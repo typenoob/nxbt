@@ -303,10 +303,6 @@ class BumbleBackend(Backend):
     ):
         super().__init__(adapter_idx)
         self.logger = logging.getLogger("nxbt")
-        # Enable Bumble's debug logging
-        bumble_logger = logging.getLogger("bumble")
-        bumble_logger.setLevel(logging.DEBUG)
-        self.logger.debug("Bumble debug logging enabled")
 
         # Default to first available HCI socket adapter
         if adapter_idx is None:

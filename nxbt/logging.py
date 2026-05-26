@@ -51,10 +51,8 @@ def _configure_logger(debug=False, log_to_file=False, disable_logging=False):
 
 
 # Auto-configure on import so child/grandchild processes get logging immediately.
-# Default to DEBUG level so no messages are lost in spawned processes;
-# create_logger() can tighten the level if the caller requests it.
 _install_intercept_handlers()
-_configure_logger(debug=True)
+_configure_logger(debug=False)
 
 
 def create_logger(debug=False, log_to_file=False, disable_logging=False):
