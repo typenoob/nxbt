@@ -4,7 +4,6 @@ import time
 import queue
 import logging
 import traceback
-import atexit
 import statistics as stat
 
 from ..backends import BACKENDS
@@ -29,8 +28,6 @@ class ControllerServer:
         self.logger = logging.getLogger("nxbt")
         # Cache logging level to increase performance on checks
         self.logger_level = self.logger.level
-
-        atexit.register(self._on_exit)
 
         if state:
             self.state = state
@@ -126,6 +123,11 @@ class ControllerServer:
             except Exception as e:
                 self.logger.debug("Error during graceful shutdown:")
                 self.logger.debug(traceback.format_exc())
+        finally:
+            try:
+                self.backend.shutdown()
+            except Exception:
+                pass
 
     def mainloop(self, itr, ctrl):
         duration_start = time.perf_counter()
@@ -346,6 +348,3 @@ class ControllerServer:
         self.protocol.process_commands(None)
         itr.sendall(self.protocol.get_report())
         return itr, ctrl
-
-    def _on_exit(self):
-        self.logger.debug("on exiting...")

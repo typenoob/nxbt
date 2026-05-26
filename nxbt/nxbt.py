@@ -168,16 +168,13 @@ class Nxbt:
 
             self._backend_cls = BumbleBackend
             self._adapter_idx = adapter_idx
-            self.backend = self._backend_cls(**self._backend_kwargs())
         elif isinstance(backend, type):
             self._backend_cls = backend
             self._adapter_idx = adapter_idx
-            self.backend = self._backend_cls(**self._backend_kwargs())
         else:
-            # Instance provided (often for tests); use as-is
+            # Instance provided (often for tests); store class for later
             self._backend_cls = type(backend)
             self._adapter_idx = getattr(backend, "_transport_spec", adapter_idx)
-            self.backend = backend
 
         # Main queue for nbxt tasks
         self.task_queue = Queue()
@@ -241,12 +238,6 @@ class Nxbt:
                 self.controllers.terminate()
 
             self.resource_manager.shutdown()
-
-            # Clean up backend (e.g. reattach USB kernel drivers)
-            try:
-                self.backend.shutdown()
-            except Exception:
-                pass
         finally:
             signal.signal(signal.SIGINT, old_handler)
 
@@ -732,7 +723,7 @@ class Nxbt:
         :rtype: list
         """
 
-        return self.backend.get_available_adapters()
+        return self._backend_cls.get_available_adapters()
 
     def get_switch_addresses(self):
         """Gets the Bluetooth MAC addresses of all
@@ -742,7 +733,7 @@ class Nxbt:
         :rtype: list
         """
 
-        return self.backend.get_switch_addresses()
+        return self._backend_cls.get_switch_addresses()
 
     @property
     def state(self):
