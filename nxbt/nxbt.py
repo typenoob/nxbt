@@ -227,19 +227,32 @@ class Nxbt:
         all spun up multiprocessing Processes. This is done to
         ensure no zombie processes linger after exit.
         """
-        import signal
-
-        # Block ^C during exit so cleanup can't be interrupted
-        old_handler = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
-            # Need to explicitly kill the controllers process
-            # since it isn't daemonized.
             if hasattr(self, "controllers") and self.controllers.is_alive():
-                self.controllers.terminate()
+                # Enqueue a QUIT message first so the worker can run its
+                # finally block (which calls cm.shutdown() to kill all
+                # controller children). On Windows, terminate() is a
+                # hard kill that bypasses finally/cleanup.
+                try:
+                    self.task_queue.put(
+                        {"command": NxbtCommands.QUIT, "arguments": {}}, block=False
+                    )
+                except Exception:
+                    pass
+                self.controllers.join(timeout=8)
+                if self.controllers.is_alive():
+                    self.controllers.terminate()
+                    self.controllers.join(timeout=3)
 
             self.resource_manager.shutdown()
-        finally:
-            signal.signal(signal.SIGINT, old_handler)
+        except Exception:
+            pass
+
+    def _on_signal(self, _signum, _frame):  # noqa: ARG002
+        """Signal handler for SIGINT (Ctrl+C). Triggers atexit cleanup
+        via sys.exit.
+        """
+        sys.exit(0)
 
     @staticmethod
     def _command_manager(
@@ -308,6 +321,8 @@ class Nxbt:
                         index = msg["arguments"]["controller_index"]
                         cm.clear_macros(index)
                         cm.remove_controller(index)
+                    elif msg["command"] == NxbtCommands.QUIT:
+                        sys.exit(0)
 
         finally:
             cm.shutdown()
