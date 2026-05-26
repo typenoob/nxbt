@@ -151,11 +151,6 @@ class _ChannelSocketBridge:
             return
         self._closed = True
         self._pdu_queue.put_nowait(None)
-        try:
-            self.channel.disconnect()
-        except Exception:
-            pass
-
 
 class _BumbleSocket:
     """Wraps a socket with getpeername/getsockname returning Bluetooth addresses."""
@@ -372,7 +367,8 @@ class BumbleBackend(Backend):
         self._stop_event_loop()
         if self._hci_old_state is not None:
             toggle_hci_adapter(self._transport_idx, not self._hci_old_state)
-        self._reattach_usb_drivers()
+        if self._transport_spec.startswith("pyusb"):
+            self._reattach_usb_drivers()
 
     def _run_async(self, coro):
         """Run an async coroutine on the background event loop."""
