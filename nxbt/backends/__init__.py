@@ -1,7 +1,13 @@
+import platform
+
 from .base import Backend
-from .bluez import BlueZBackend
 from .bumble import BumbleBackend
 
-__all__ = ["Backend", "BlueZBackend", "BumbleBackend", "BACKENDS"]
+if platform.system() == "Linux":
+    from .bluez import BlueZBackend
 
-BACKENDS = {"bluez": BlueZBackend, "bumble": BumbleBackend}
+    __all__ = ["Backend", "BlueZBackend", "BumbleBackend", "BACKENDS"]
+    BACKENDS = {"bluez": BlueZBackend, "bumble": BumbleBackend}
+else:
+    __all__ = ["Backend", "BumbleBackend", "BACKENDS"]
+    BACKENDS = {"bumble": BumbleBackend}

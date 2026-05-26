@@ -1,4 +1,3 @@
-import fcntl
 import os
 import signal
 import time
@@ -325,7 +324,12 @@ class ControllerServer:
                 itr, ctrl = self.backend.accept()
                 self.protocol.process_commands(None)
                 itr.sendall(self.protocol.get_report())
-                fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
+                try:
+                    import fcntl
+
+                    fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
+                except ModuleNotFoundError:
+                    pass
                 self._run_pairing_handshake(itr)
                 break
             except OSError as e:
@@ -341,7 +345,12 @@ class ControllerServer:
         """
         self.state["state"] = "reconnecting"
         itr, ctrl = self.backend.reconnect(reconnect_address)
-        fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
+        try:
+            import fcntl
+
+            fcntl.fcntl(itr, fcntl.F_SETFL, os.O_NONBLOCK)
+        except ModuleNotFoundError:
+            pass
         self.protocol.process_commands(None)
         itr.sendall(self.protocol.get_report())
         return itr, ctrl

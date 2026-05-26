@@ -13,7 +13,7 @@ from bumble.keys import JsonKeyStore
 from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
-from bumble.transport import open_transport_or_link
+from bumble.transport import open_transport
 
 from .internal.bluez import get_hci_state, toggle_hci_adapter
 
@@ -43,7 +43,19 @@ class _ChannelSocketBridge:
 
         # Socket pair: self._s1 <-> self.socket
         # Server reads/writes self.socket; bridge reads/writes self._s1
-        s1, self.socket = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        if hasattr(socket, "AF_UNIX"):
+            s1, self.socket = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        else:
+            # Windows fallback: TCP loopback socketpair
+            listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            s1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s1.settimeout(5)
+            s1.connect(listener.getsockname())
+            self.socket, _ = listener.accept()
+            s1.settimeout(None)
+            listener.close()
         self._s1 = s1
 
         def channel_sink(pdu: bytes):
@@ -152,6 +164,7 @@ class _ChannelSocketBridge:
         self._closed = True
         self._pdu_queue.put_nowait(None)
 
+
 class _BumbleSocket:
     """Wraps a socket with getpeername/getsockname returning Bluetooth addresses."""
 
@@ -210,31 +223,64 @@ class BumbleBackend(Backend):
 
         import glob
         import os
+        import platform
 
-        for entry in os.listdir("/sys/class/bluetooth/"):
-            if not entry.startswith("hci"):
-                continue
-            idx = entry.replace("hci", "")
-            # Check rfkill state — adapter must not be soft or hard blocked
-            blocked = False
-            for rfkill_state in glob.glob(
-                f"/sys/class/bluetooth/{entry}/rfkill*/state"
-            ):
-                try:
-                    with open(rfkill_state) as f:
-                        if f.read().strip() == "0":
-                            blocked = True
-                            break
-                except OSError:
-                    pass
-            if not blocked:
-                adapters.append(f"hci-socket:{idx}")
+        if platform.system() == "Linux":
+            for entry in os.listdir("/sys/class/bluetooth/"):
+                if not entry.startswith("hci"):
+                    continue
+                idx = entry.replace("hci", "")
+                # Check rfkill state — adapter must not be soft or hard blocked
+                blocked = False
+                for rfkill_state in glob.glob(
+                    f"/sys/class/bluetooth/{entry}/rfkill*/state"
+                ):
+                    try:
+                        with open(rfkill_state) as f:
+                            if f.read().strip() == "0":
+                                blocked = True
+                                break
+                    except OSError:
+                        pass
+                if not blocked:
+                    adapters.append(f"hci-socket:{idx}")
+
         # Scan for USB Bluetooth adapters as fallback
         try:
             import usb.core
 
-            for idx, _ in enumerate(usb.core.find(find_all=True, bDeviceClass=0xE0)):
-                adapters.append(f"pyusb:{idx}")
+            # Use libusb_package if available (required on Windows)
+            try:
+                import libusb_package
+
+                usb_find = libusb_package.find
+            except ImportError:
+                usb_find = usb.core.find
+
+            BT_HCI_CLASS = (0xE0, 0x01, 0x01)  # Wireless Controller / RF / Bluetooth
+            bt_count = 0
+
+            for dev in usb_find(find_all=True):
+                is_hci = (
+                    dev.bDeviceClass,
+                    dev.bDeviceSubClass,
+                    dev.bDeviceProtocol,
+                ) == BT_HCI_CLASS
+                if not is_hci and dev.bDeviceClass == 0x00:
+                    for cfg in dev:
+                        for intf in cfg:
+                            if (
+                                intf.bInterfaceClass,
+                                intf.bInterfaceSubClass,
+                                intf.bInterfaceProtocol,
+                            ) == BT_HCI_CLASS:
+                                is_hci = True
+                                break
+                        if is_hci:
+                            break
+                if is_hci:
+                    adapters.append(f"pyusb:{bt_count}")
+                    bt_count += 1
         except Exception:
             pass
         return adapters
@@ -334,16 +380,33 @@ class BumbleBackend(Backend):
             import usb.core
 
             try:
+                import libusb_package
+
+                usb_find = libusb_package.find
+            except ImportError:
+                usb_find = usb.core.find
+
+            try:
                 usb_idx = int(self._transport_spec.split(":")[1])
-                devices = list(usb.core.find(find_all=True, bDeviceClass=0xE0))
+                devices = list(
+                    usb_find(
+                        find_all=True,
+                        bDeviceClass=0xE0,
+                        bDeviceSubClass=0x01,
+                        bDeviceProtocol=0x01,
+                    )
+                )
                 self.logger.debug(
                     f"USB cleanup: usb_idx={usb_idx}, devices_found={len(devices)}"
                 )
                 if usb_idx < len(devices):
                     usb_device = devices[usb_idx]
+                else:
+                    self.logger.debug("No matching USB device found for cleanup")
+                    return
             except Exception as e:
                 self.logger.debug(f"USB device lookup failed: {e}")
-                self.logger.debug(f"Could not find USB device for cleanup: {e}")
+                return
             for cfg in usb_device:
                 for intf in cfg:
                     if usb_device.is_kernel_driver_active(intf.bInterfaceNumber):
@@ -436,7 +499,7 @@ class BumbleBackend(Backend):
             if self._hci_old_state:
                 toggle_hci_adapter(self._transport_idx)
         # Open transport
-        self._transport = self._run_async(open_transport_or_link(self._transport_spec))
+        self._transport = self._run_async(open_transport(self._transport_spec))
 
         # Create device — use the HCI adapter's real public address
         self._device = Device.with_hci(

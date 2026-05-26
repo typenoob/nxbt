@@ -5,11 +5,13 @@ import random
 import subprocess
 import threading
 import time
+import platform
 from pathlib import Path
 from shutil import which
 
-from dbus_fast import BusType, Message, Variant
-from dbus_fast.aio.message_bus import MessageBus
+if platform.system() == "Linux":
+    from dbus_fast import BusType, Message, Variant
+    from dbus_fast.aio.message_bus import MessageBus
 
 AGENT_PATH = "/nxbt/agent"
 
