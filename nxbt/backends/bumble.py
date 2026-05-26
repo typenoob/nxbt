@@ -284,6 +284,8 @@ class BumbleBackend(Backend):
         self._transport = None
         # Store controller type for device reset
         self._pending_controller_type = None
+        # Save old hci state to restore
+        self._hci_old_state = None
 
     @property
     def address(self) -> str:
@@ -367,9 +369,9 @@ class BumbleBackend(Backend):
 
     def shutdown(self):
         """Clean up the transport, bridges, and event loop."""
-        if self._hci_old_state:
-            toggle_hci_adapter(self._transport_idx, self._hci_old_state)
         self._stop_event_loop()
+        if self._hci_old_state is not None:
+            toggle_hci_adapter(self._transport_idx, not self._hci_old_state)
         self._reattach_usb_drivers()
 
     def _run_async(self, coro):
@@ -433,11 +435,10 @@ class BumbleBackend(Backend):
 
     def _setup_async(self, controller_type):
         """Async setup of the Bumble device."""
-        if self._transport_spec.startswith("hci") and get_hci_state(
-            self._transport_idx
-        ):
+        if self._transport_spec.startswith("hci"):
             self._hci_old_state = get_hci_state(self._transport_idx)
-            toggle_hci_adapter(self._transport_idx)
+            if self._hci_old_state:
+                toggle_hci_adapter(self._transport_idx)
         # Open transport
         self._transport = self._run_async(open_transport_or_link(self._transport_spec))
 
