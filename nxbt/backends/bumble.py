@@ -21,6 +21,18 @@ from ..controller.controller import ControllerTypes
 from ..utils import load_file
 from .base import Backend
 
+# pyusb is unmaintained; the long-term plan is to switch to Bumble's
+# native "usb" transport. Until the usb transport works reliably on Windows,
+# keep this workaround so libusb doesn't raise NotImplementedError when
+# claiming interfaces on WinUSB-backed devices.
+import sys
+
+if sys.platform == "win32":
+    from usb.core import Device as UsbDevice
+
+    UsbDevice.is_kernel_driver_active = lambda self, interface: False
+
+
 HID_CONTROL_PSM = 0x0011
 HID_INTERRUPT_PSM = 0x0013
 
