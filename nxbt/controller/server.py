@@ -90,6 +90,7 @@ class ControllerServer:
         self.state["state"] = "initializing"
         signal.signal(signal.SIGTERM, self._on_exit)
 
+        paired = False
         try:
             # If we have a lock, prevent other controllers
             # from initializing at the same time and saturating the DBus,
@@ -103,8 +104,10 @@ class ControllerServer:
                         itr, ctrl = self.reconnect(reconnect_address)
                     except OSError:
                         itr, ctrl = self.pair()
+                        paired = True
                 else:
                     itr, ctrl = self.pair()
+                    paired = True
             finally:
                 if self.lock:
                     self.lock.release()
@@ -121,7 +124,8 @@ class ControllerServer:
                     self.logger.debug(f"Failed to remove bond from {name}: {e}")
 
             self.state["state"] = "connected"
-            self.input.buffer_macro("A 0.1s", os.urandom(24).hex())
+            if paired:
+                self.input.buffer_macro("A 0.1s", os.urandom(24).hex())
             self.mainloop(itr, ctrl)
 
         except KeyboardInterrupt:
