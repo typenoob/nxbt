@@ -6,16 +6,14 @@ import socket
 import threading
 import xml.etree.ElementTree as ET
 
-from bumble import drivers
 from bumble.core import UUID
 from bumble.device import Device
 from bumble.hci import HCI_Write_Default_Link_Policy_Settings_Command
-from bumble.host import Host
 from bumble.keys import JsonKeyStore
 from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
-from bumble.transport import open_transport
+from .internal.usb import open_transport
 
 from .internal.bluez import get_hci_state, toggle_hci_adapter
 
@@ -281,7 +279,7 @@ class BumbleBackend(Backend):
                         if is_hci:
                             break
                 if is_hci:
-                    adapters.append(f"pyusb:{bt_count}")
+                    adapters.append(f"usb:{bt_count}")
                     bt_count += 1
         except Exception:
             pass
@@ -372,7 +370,7 @@ class BumbleBackend(Backend):
 
     def _reattach_usb_drivers(self):
         """Reattach kernel drivers on USB interfaces we claimed."""
-        if not self._transport_spec.startswith("pyusb:"):
+        if not self._transport_spec.startswith("usb:"):
             return
         try:
             import usb.core
@@ -428,7 +426,7 @@ class BumbleBackend(Backend):
         self._stop_event_loop()
         if self._hci_old_state is not None:
             toggle_hci_adapter(self._transport_idx, not self._hci_old_state)
-        if self._transport_spec.startswith("pyusb"):
+        if self._transport_spec.startswith("usb"):
             self._reattach_usb_drivers()
 
     def _run_async(self, coro):
@@ -490,35 +488,12 @@ class BumbleBackend(Backend):
                 service_attributes.append(ServiceAttribute(attr_id.value, attr_value))
         return service_attributes
 
-    async def _load_driver_over_usb(self):
-        async with await open_transport(
-            self._transport_spec.replace("py", "")
-        ) as hci_transport:
-            host = Host(hci_transport.source, hci_transport.sink)
-            if driver := await drivers.get_driver_for_host(host):
-                await driver.init_controller()
-
     def _setup_async(self, controller_type):
         """Async setup of the Bumble device."""
         if self._transport_spec.startswith("hci"):
             self._hci_old_state = get_hci_state(self._transport_idx)
             if self._hci_old_state:
                 toggle_hci_adapter(self._transport_idx)
-
-        # pyusb is unmaintained; the long-term plan is to use Bumble's native
-        # "usb" transport. On Windows, pyusb's driver initialization is unreliable,
-        # so we:
-        # a) Patch is_kernel_driver_active so libusb can claim WinUSB interfaces
-        # b) Use native usb transport to initialize the controller via _load_driver()
-        import sys
-
-        if sys.platform == "win32":
-            from usb.core import Device as UsbDevice
-
-            UsbDevice.is_kernel_driver_active = lambda self, interface: False
-            _reset = Host.reset
-            Host.reset = lambda self, **kw: _reset(self, driver_factory=None, **kw)
-            self._run_async(self._load_driver_over_usb())
 
         # Open transport
         self._transport = self._run_async(open_transport(self._transport_spec))
