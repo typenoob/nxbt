@@ -447,8 +447,28 @@ class BumbleBackend(Backend):
                 service_attributes.append(ServiceAttribute(attr_id.value, attr_value))
         return service_attributes
 
+    def _patch_intel_driver_variant(self):
+        """Make hardware variant 0x18 compare equal to the allowed variants so the hardcoded check passes."""
+        try:
+            from bumble.drivers import intel as intel_drv
+
+            if getattr(intel_drv.HardwareVariant.__eq__, "_nxbt_patched", False):
+                return
+            _orig_eq = intel_drv.HardwareVariant.__eq__
+
+            def _patched_eq(self, other):
+                if other.value == 0x18:
+                    return True
+                return _orig_eq(self, other)
+
+            _patched_eq._nxbt_patched = True
+            intel_drv.HardwareVariant.__eq__ = _patched_eq
+        except Exception as e:
+            self.logger.debug(f"Intel driver patch skipped: {e}")
+
     def _setup_async(self, controller_type):
         """Async setup of the Bumble device."""
+        self._patch_intel_driver_variant()
         if self._transport_spec.startswith("hci"):
             self._hci_old_state = get_hci_state(self._transport_idx)
             if self._hci_old_state:
