@@ -250,10 +250,13 @@ class BumbleBackend(Backend):
     @staticmethod
     def get_switch_addresses() -> list[str]:
         addresses = []
-        for path in JsonKeyStore().directory_name.iterdir():
-            keystore = JsonKeyStore(None, str(path))
-            entries = asyncio.run(keystore.get_all())
-            addresses += [entry[0].replace("/P", "") for entry in entries]
+        try:
+            for path in JsonKeyStore().directory_name.iterdir():
+                keystore = JsonKeyStore(None, str(path))
+                entries = asyncio.run(keystore.get_all())
+                addresses += [entry[0].replace("/P", "") for entry in entries]
+        except FileNotFoundError:
+            pass
         return addresses
 
     def __init__(
