@@ -14,7 +14,7 @@ from .internal.bluez import (
     ADAPTER_INTERFACE,
 )
 from ..controller.controller import ControllerTypes
-from ..utils import load_file
+from ..controller.sdp import SWITCH_CONTROLLER_SDP
 from .base import Backend
 
 
@@ -67,9 +67,7 @@ class BlueZBackend(Backend):
         self._bt.set_discoverable_timeout(180)
         self._bt.set_alias(self.ALIASES[controller_type])
         # Adding the SDP record
-        sdp_record_path = load_file("../controller/sdp/switch-controller.xml")
-        with open(sdp_record_path, "r") as f:
-            sdp_record = f.read()
+        sdp_record = SWITCH_CONTROLLER_SDP
 
         opts = {
             "ServiceRecord": sdp_record,

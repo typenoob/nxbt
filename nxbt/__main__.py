@@ -10,7 +10,6 @@
 # nuitka-project: --no-deployment-flag=self-execution
 # nuitka-project: --include-data-dir=./nxbt/web/static=nxbt/web/static
 # nuitka-project: --include-data-dir=./nxbt/web/templates=nxbt/web/templates
-# nuitka-project: --include-data-dir=./nxbt/controller/sdp=nxbt/controller/sdp
 # nuitka-project: --remove-output
 
 

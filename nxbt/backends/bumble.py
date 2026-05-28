@@ -16,7 +16,7 @@ from bumble.transport import open_transport
 from .internal.bluez import get_hci_state, toggle_hci_adapter
 
 from ..controller.controller import ControllerTypes
-from ..utils import load_file
+from ..controller.sdp import SWITCH_CONTROLLER_SDP
 from .base import Backend
 
 HID_CONTROL_PSM = 0x0011
@@ -434,9 +434,7 @@ class BumbleBackend(Backend):
 
     def _build_sdp_record(self) -> list:
         """Parse the SDP service record from switch-controller.xml."""
-        sdp_record_path = load_file("../controller/sdp/switch-controller.xml")
-        tree = ET.parse(sdp_record_path)
-        root = tree.getroot()
+        root = ET.fromstring(SWITCH_CONTROLLER_SDP)
         record = self._xml_to_data_element(root)
         # Record is a SEQUENCE of ATTRIBUTE elements; extract into attribute list
         assert record.type == DataElement.SEQUENCE
