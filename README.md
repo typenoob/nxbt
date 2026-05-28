@@ -14,6 +14,17 @@ I started this as a fork of the original project. Once it reaches sufficient mat
 - [x] Use [bumble](https://github.com/google/bumble) to rewrite the repo
 - [ ] Add Windows support for generic USB drivers through [zadig](https://zadig.akeo.ie/), such as [WinUSB](https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/introduction-to-winusb-for-developers)
 
+## Quick Start
+
+```
+docker run --rm --privileged --network host \
+  -v /var/run/dbus:/var/run/dbus \
+  -v /var/lib/bluetooth:/var/lib/bluetooth \
+  -v /sys:/sys \
+  -v /dev:/dev \
+  nxbt:gnu -b bluez demo
+```
+
 ## Bluetooth Backends
 
 NXBT supports multiple Bluetooth backend implementations. The default backend is **Bumble**, but you can switch to **BlueZ** if needed.
