@@ -475,12 +475,6 @@ wheels = [
 ]
 
 [[package]]
-name = "evdev"
-version = "1.9.2"
-source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/63/fe/a17c106a1f4061ce83f04d14bcedcfb2c38c7793ea56bfb906a6fadae8cb/evdev-1.9.2.tar.gz", hash = "sha256:5d3278892ce1f92a74d6bf888cc8525d9f68af85dbe336c95d1c87fb8f423069", size = 33301, upload-time = "2025-05-01T19:53:47.69Z" }
-
-[[package]]
 name = "eventlet"
 version = "0.40.3"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
@@ -1195,7 +1189,7 @@ requires-dist = [
     { name = "jinja2", specifier = "==3.1.2" },
     { name = "loguru", specifier = ">=0.7.0" },
     { name = "psutil", specifier = "==7.2.1" },
-    { name = "pynput", specifier = "==1.7.1" },
+    { name = "pynput", specifier = "==1.6.8" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "werkzeug", specifier = "==3.1.0" },
 ]
@@ -1478,17 +1472,16 @@ wheels = [
 
 [[package]]
 name = "pynput"
-version = "1.7.1"
+version = "1.6.8"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 dependencies = [
-    { name = "evdev", marker = "'linux' in sys_platform" },
     { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
     { name = "python-xlib", marker = "'linux' in sys_platform" },
     { name = "six" },
 ]
-sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/71/32/a74e99d7b538ed324550edca364ae708cc9c3ba06896f51cd36160b3acf6/pynput-1.7.1.tar.gz", hash = "sha256:5a5598bfb14322eff980ac6ca820635fce9028faa4f64a8e1581243aaf6785ee", size = 75088, upload-time = "2020-08-30T19:25:41.832Z" }
+sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e7/32/fa88984fc580de9e9fd08ee36dfd78ea15658d5b0268095785da7ab75ba0/pynput-1.6.8.tar.gz", hash = "sha256:68c1863d6a1520b44b6a915e866cbfa1b8d127aef9289f25183c93e28ee5049a", size = 68673, upload-time = "2020-02-28T13:37:55.408Z" }
 wheels = [
-    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/89/66/0e62f409bb785db78ae5d228e6b1bf1e80d210744bcd21b9487417b049f5/pynput-1.7.1-py2.py3-none-any.whl", hash = "sha256:b2b96cec8411a940a7f73da6965f13927d03d46fb5105c5bc63ed04f29b2b8f0", size = 99484, upload-time = "2020-08-30T19:25:46.236Z" },
+    { url = "https://pypi.tuna.tsinghua.edu.cn/packages/33/0a/ea13c055a90b1aff5945e7eb330584f15e5282aead15a8f3cdb977a1534e/pynput-1.6.8-py2.py3-none-any.whl", hash = "sha256:42d6d58abe401a4c98ea04e443e61f74b6b0f97672f42042f566c68700ad0c65", size = 91138, upload-time = "2020-02-28T13:38:01.152Z" },
 ]
 
 [[package]]
