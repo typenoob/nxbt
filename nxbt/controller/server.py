@@ -152,9 +152,6 @@ class ControllerServer:
                     elapsed = (time.perf_counter() - timer_start) * 1000
                     self.logger.debug(f"recv took {elapsed:.1f}ms, len={len(reply)}")
                     self.logger.debug(format_msg_switch(reply))
-            except ConnectionAbortedError as e:
-                itr, ctrl = self.save_connection(e)
-                continue
             except BlockingIOError:
                 reply = None
 
@@ -292,7 +289,7 @@ class ControllerServer:
                 finally:
                     if self.lock:
                         self.lock.release()
-            except (OSError, ConnectionAbortedError):
+            except OSError:
                 self.reconnect_counter += 1
                 self.logger.debug(error)
                 time.sleep(0.5)

@@ -1,7 +1,6 @@
 import asyncio
+import collections
 import logging
-import queue
-import select
 import socket
 import threading
 import xml.etree.ElementTree as ET
@@ -13,7 +12,7 @@ from bumble.keys import JsonKeyStore
 from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
-from .internal.usb import open_transport
+from bumble.transport import open_transport
 
 from .internal.bluez import get_hci_state, toggle_hci_adapter
 
@@ -28,18 +27,19 @@ HID_INTERRUPT_PSM = 0x0013
 class _ChannelSocketBridge:
     """Bridges a Bumble ClassicChannel to a Python socket via a socketpair.
 
-    Two background threads forward data:
+    Two asyncio tasks forward data:
     - _drain: reads server-sent data from socketpair, sends to Bumble channel
     - _pump: drains PDU queue, writes to socketpair end for server to recv
 
-    Threads start immediately.
+    Tasks must be scheduled on the same event loop as the Bumble transport.
     """
 
     def __init__(self, channel: ClassicChannel):
         self.channel = channel
-        self._pdu_queue: queue.Queue[bytes | None] = queue.Queue()
+        self.loop = asyncio.get_running_loop()
+        self._pdu_queue: asyncio.Queue[bytes | None] = asyncio.Queue()
         self._closed = False
-        self._channel_open = threading.Event()
+        self._channel_open = asyncio.Event()
 
         # Socket pair: self._s1 <-> self.socket
         # Server reads/writes self.socket; bridge reads/writes self._s1
@@ -57,112 +57,126 @@ class _ChannelSocketBridge:
             s1.settimeout(None)
             listener.close()
         self._s1 = s1
+        self._s1.setblocking(False)
+        self._s1_shutdown = False
+        self._socket_shutdown = False
 
         def channel_sink(pdu: bytes):
             if not self._closed:
-                self._pdu_queue.put_nowait(pdu)
+                self.loop.call_soon_threadsafe(self._pdu_queue.put_nowait, pdu)
 
         channel.sink = channel_sink
-        channel.on("close", self._on_channel_close)
-        channel.on("open", self._on_channel_open)
+        channel.on(
+            "close", lambda: self.loop.call_soon_threadsafe(self._on_channel_close)
+        )
+        channel.on(
+            "open", lambda: self.loop.call_soon_threadsafe(self._channel_open.set)
+        )
 
         # Check if already open
         if getattr(channel, "state", None) == channel.State.OPEN:
-            self._on_channel_open()
+            self._channel_open.set()
 
-        # Start threads immediately
-        self._drain_thread = threading.Thread(
-            target=self._drain_loop, daemon=True, name="nxbt-bumble-drain"
-        )
-        self._pump_thread = threading.Thread(
-            target=self._pump_loop, daemon=True, name="nxbt-bumble-pump"
-        )
-        self._drain_thread.start()
-        self._pump_thread.start()
+        # Start asyncio tasks
+        self._drain_task = self.loop.create_task(self._drain())
+        self._pump_task = self.loop.create_task(self._pump())
 
-    def _send_pdu(self, data: bytes, logger: logging.Logger) -> bool:
+    def _on_channel_close(self):
+        self._shutdown_all()
+
+    def _shutdown_all(self):
+        if self._s1_shutdown and self._socket_shutdown:
+            return
+        # Shutdown _s1 write side so self.socket recv() sees EOF (not RST on Windows)
+        if not self._s1_shutdown:
+            try:
+                self._s1.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
+            self._s1_shutdown = True
+        # Shutdown _socket so _drain's sock_recv returns immediately
+        if not self._socket_shutdown:
+            try:
+                self.socket.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
+            self._socket_shutdown = True
+
+    async def _drain(self):
+        """Read data from server socket and send to Bumble channel."""
+        logger = logging.getLogger("nxbt")
+        logger.debug(f"_drain started, _s1 fd={self._s1.fileno()}")
+        try:
+            while not self._closed:
+                try:
+                    data = await self.loop.sock_recv(self._s1, 4096)
+                except OSError as e:
+                    logger.debug(f"_drain sock_recv failed: {e}")
+                    break
+                if not data:
+                    break  # server closed socket
+
+                if not await self._send_pdu(data, logger):
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug(f"_drain crashed: {e}")
+        finally:
+            self._closed = True
+            logger.debug("_drain exiting")
+            # Shutdown write before close so peer sees EOF not RST
+            if not self._s1_shutdown:
+                try:
+                    self._s1.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+                self._s1_shutdown = True
+            try:
+                self._s1.close()
+            except OSError:
+                pass
+
+    async def _send_pdu(self, data: bytes, logger: logging.Logger) -> bool:
         if not self._channel_open.is_set():
-            self._channel_open.wait(timeout=30)
+            try:
+                await asyncio.wait_for(self._channel_open.wait(), timeout=30)
+            except asyncio.TimeoutError:
+                pass
             if not self._channel_open.is_set() or self._closed:
                 return False
         try:
             self.channel.send_pdu(data)
             return True
         except Exception as e:
-            logger.debug(f"_drain_loop send_pdu failed: {type(e).__name__}: {e}")
-            try:
-                self._s1.shutdown(socket.SHUT_RDWR)
-            except OSError:
-                pass
+            logger.debug(f"_drain send_pdu failed: {type(e).__name__}: {e}")
+            self._shutdown_all()
             return False
 
-    def _on_channel_open(self):
-        self._channel_open.set()
-
-    def _on_channel_close(self):
-        if self._closed:
-            return
-        self._closed = True
-        self._pdu_queue.put_nowait(None)
-        # Shutdown before close to unblock select/recv in drain/pump threads
-        try:
-            self._s1.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-
-    def _drain_loop(self):
-        """Read data from server socket and send to Bumble channel."""
-        logger = logging.getLogger("nxbt")
-        logger.debug(f"_drain_loop started, _s1 fd={self._s1.fileno()}")
-        try:
-            while True:
-                try:
-                    readable, _, _ = select.select([self._s1], [], [], 1.0)
-                except OSError as e:
-                    logger.debug(f"_drain_loop select failed: {e}")
-                    break
-                if not readable:
-                    if self._closed:
-                        break
-                    continue
-
-                try:
-                    data = self._s1.recv(4096)
-                    if not data:
-                        break  # server closed socket
-                except OSError as e:
-                    logger.debug(f"_drain_loop recv failed: {e}")
-                    break
-
-                if not self._send_pdu(data, logger):
-                    return
-        except Exception as e:
-            logger.debug(f"_drain_loop crashed: {e}")
-        finally:
-            self._closed = True
-            logger.debug("_drain_loop exiting")
-            try:
-                self._s1.close()
-            except OSError:
-                pass
-
-    def _pump_loop(self):
+    async def _pump(self):
         """Drain PDU queue and write to socketpair for server to recv."""
-        while True:
-            # Use blocking queue.get() — queue.put() wakes this immediately
-            pdu = self._pdu_queue.get()
-            if pdu is None:
-                return
-            try:
-                self._s1.sendall(pdu)
-            except OSError:
-                return
+        try:
+            while not self._closed:
+                pdu = await self._pdu_queue.get()
+                if pdu is None:
+                    break
+                try:
+                    await self.loop.sock_sendall(self._s1, pdu)
+                except OSError:
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logging.getLogger("nxbt").debug(f"_pump crashed: {e}")
 
     def close(self):
         if self._closed:
             return
         self._closed = True
         self._pdu_queue.put_nowait(None)
+        self._shutdown_all()
+        self._drain_task.cancel()
+        self._pump_task.cancel()
 
 
 class _BumbleSocket:
@@ -626,39 +640,45 @@ class BumbleBackend(Backend):
         return itr, ctrl
 
     def reconnect(self, reconnect_address: str) -> tuple:
+        async def create_bridges(address: str):
+            if 256 in self._device.connections:
+                conn = self._device.connections[256]
+            else:
+                conn = await self._device.connect_classic(address)
+                await conn.authenticate()
+                await conn.encrypt()
+            # Old bridges have dead socketpairs (shutdown on channel close).
+            # Create fresh L2CAP channels and fresh bridges.
+            ctrl_channel = await conn.create_l2cap_channel(
+                ClassicChannelSpec(psm=HID_CONTROL_PSM)
+            )
+            itr_channel = await conn.create_l2cap_channel(
+                ClassicChannelSpec(psm=HID_INTERRUPT_PSM)
+            )
+
+            # Replace old dead bridges with fresh ones
+            itr_bridge = _ChannelSocketBridge(itr_channel)
+            ctrl_bridge = _ChannelSocketBridge(ctrl_channel)
+
+            return itr_bridge, ctrl_bridge
+
         addresses = (
             reconnect_address
             if isinstance(reconnect_address, list)
             else [reconnect_address]
         )
+
         for address in addresses:
             self.logger.debug(f"BumbleBackend: reconnecting to {address}...")
-            if 256 in self._device.connections:
-                conn = self._device.connections[256]
-            else:
-                conn = self._run_async(self._device.connect_classic(address))
-                self._run_async(conn.authenticate())
-                self._run_async(conn.encrypt())
-            # Old bridges have dead socketpairs (shutdown on channel close).
-            # Create fresh L2CAP channels and fresh bridges.
-            ctrl_channel = self._run_async(
-                conn.create_l2cap_channel(ClassicChannelSpec(psm=HID_CONTROL_PSM))
-            )
-
-            itr_channel = self._run_async(
-                conn.create_l2cap_channel(ClassicChannelSpec(psm=HID_INTERRUPT_PSM))
-            )
-
             local_addr = str(self._device.public_address or self._device.random_address)
             self._bridges.clear()
 
-            # Replace old dead bridges with fresh ones
-            itr_bridge = _ChannelSocketBridge(itr_channel)
+            itr_bridge, ctrl_bridge = self._run_async(create_bridges(address))
+
             self._bridges.append(itr_bridge)
             itr = _BumbleSocket(itr_bridge.socket, address, local_addr)
             itr._bridge = itr_bridge
 
-            ctrl_bridge = _ChannelSocketBridge(ctrl_channel)
             self._bridges.append(ctrl_bridge)
             ctrl = _BumbleSocket(ctrl_bridge.socket, address, local_addr)
             ctrl._bridge = ctrl_bridge
