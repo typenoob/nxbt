@@ -227,7 +227,6 @@ class ControllerServer:
 
     def _run_pairing_handshake(self, itr):
         received_first_message = False
-        in_sniff_mode = True
         while True:
             try:
                 reply = itr.recv(50)
@@ -249,11 +248,6 @@ class ControllerServer:
                 itr.sendall(msg)
             except BlockingIOError:
                 continue
-
-            if reply and in_sniff_mode:
-                # if isinstance(self.backend, BumbleBackend):
-                #     self.backend.exit_sniff_mode()
-                in_sniff_mode = False
 
             if (
                 reply

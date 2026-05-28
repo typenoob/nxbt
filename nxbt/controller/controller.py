@@ -1,8 +1,5 @@
 from enum import Enum
-
-from dbus_fast import DBusError
-
-from ..utils import load_file
+import logging
 
 
 class ControllerTypes(Enum):
@@ -30,35 +27,3 @@ class Controller:
         if controller_type not in self.ALIASES:
             raise ValueError("Unknown controller type specified")
         self.alias = self.ALIASES[controller_type]
-
-    def setup(self):
-        """Configures the specified Bluetooth device as the
-        specified controller.
-        """
-
-        # Setting up Bluetooth adapter options
-        self.bt.set_powered(True)
-        self.bt.set_pairable(True)
-        self.bt.set_pairable_timeout(0)
-        self.bt.set_discoverable_timeout(180)
-
-        self.bt.set_alias(self.alias)
-        # Adding the SDP record
-        sdp_record_path = load_file("sdp/switch-controller.xml")
-        sdp_record = None
-        with open(sdp_record_path, "r", encoding="utf-8") as f:
-            sdp_record = f.read()
-
-        opts = {
-            "ServiceRecord": sdp_record,
-            "Role": "server",
-            "RequireAuthentication": False,
-            "RequireAuthorization": False,
-            "AutoConnect": True,
-        }
-        # If the profile has already been registered,
-        # catch the error and continue
-        try:
-            self.bt.register_profile(self.SDP_RECORD_PATH, self.SDP_UUID, opts)
-        except DBusError as e:
-            self.logger.debug(e)
