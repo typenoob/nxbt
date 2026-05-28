@@ -1,5 +1,4 @@
 import asyncio
-import collections
 import logging
 import socket
 import threading
@@ -30,8 +29,6 @@ class _ChannelSocketBridge:
     Two asyncio tasks forward data:
     - _drain: reads server-sent data from socketpair, sends to Bumble channel
     - _pump: drains PDU queue, writes to socketpair end for server to recv
-
-    Tasks must be scheduled on the same event loop as the Bumble transport.
     """
 
     def __init__(self, channel: ClassicChannel):
@@ -41,12 +38,9 @@ class _ChannelSocketBridge:
         self._closed = False
         self._channel_open = asyncio.Event()
 
-        # Socket pair: self._s1 <-> self.socket
-        # Server reads/writes self.socket; bridge reads/writes self._s1
         if hasattr(socket, "AF_UNIX"):
             s1, self.socket = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         else:
-            # Windows fallback: TCP loopback socketpair
             listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             listener.bind(("127.0.0.1", 0))
             listener.listen(1)
@@ -58,17 +52,13 @@ class _ChannelSocketBridge:
             listener.close()
         self._s1 = s1
         self._s1.setblocking(False)
-        self._s1_shutdown = False
-        self._socket_shutdown = False
 
         def channel_sink(pdu: bytes):
             if not self._closed:
                 self.loop.call_soon_threadsafe(self._pdu_queue.put_nowait, pdu)
 
         channel.sink = channel_sink
-        channel.on(
-            "close", lambda: self.loop.call_soon_threadsafe(self._on_channel_close)
-        )
+        channel.on("close", lambda: self.loop.call_soon_threadsafe(self._shutdown))
         channel.on(
             "open", lambda: self.loop.call_soon_threadsafe(self._channel_open.set)
         )
@@ -77,84 +67,32 @@ class _ChannelSocketBridge:
         if getattr(channel, "state", None) == channel.State.OPEN:
             self._channel_open.set()
 
-        # Start asyncio tasks
         self._drain_task = self.loop.create_task(self._drain())
         self._pump_task = self.loop.create_task(self._pump())
 
-    def _on_channel_close(self):
-        self._shutdown_all()
-
-    def _shutdown_all(self):
-        if self._s1_shutdown and self._socket_shutdown:
-            return
-        # Shutdown _s1 write side so self.socket recv() sees EOF (not RST on Windows)
-        if not self._s1_shutdown:
-            try:
-                self._s1.shutdown(socket.SHUT_WR)
-            except OSError:
-                pass
-            self._s1_shutdown = True
-        # Shutdown _socket so _drain's sock_recv returns immediately
-        if not self._socket_shutdown:
-            try:
-                self.socket.shutdown(socket.SHUT_WR)
-            except OSError:
-                pass
-            self._socket_shutdown = True
-
     async def _drain(self):
-        """Read data from server socket and send to Bumble channel."""
-        logger = logging.getLogger("nxbt")
-        logger.debug(f"_drain started, _s1 fd={self._s1.fileno()}")
         try:
+            # Wait for the channel to be fully open before sending any PDUs
+            if not self._channel_open.is_set():
+                try:
+                    await asyncio.wait_for(self._channel_open.wait(), timeout=30)
+                except asyncio.TimeoutError:
+                    return
             while not self._closed:
-                try:
-                    data = await self.loop.sock_recv(self._s1, 4096)
-                except OSError as e:
-                    logger.debug(f"_drain sock_recv failed: {e}")
-                    break
+                data = await self.loop.sock_recv(self._s1, 4096)
                 if not data:
-                    break  # server closed socket
-
-                if not await self._send_pdu(data, logger):
                     break
-        except asyncio.CancelledError:
+                if self._closed:
+                    break
+                if not self._channel_open.is_set():
+                    continue
+                self.channel.send_pdu(data)
+        except OSError:
             pass
-        except Exception as e:
-            logger.debug(f"_drain crashed: {e}")
         finally:
-            self._closed = True
-            logger.debug("_drain exiting")
-            # Shutdown write before close so peer sees EOF not RST
-            if not self._s1_shutdown:
-                try:
-                    self._s1.shutdown(socket.SHUT_WR)
-                except OSError:
-                    pass
-                self._s1_shutdown = True
-            try:
-                self._s1.close()
-            except OSError:
-                pass
-
-    async def _send_pdu(self, data: bytes, logger: logging.Logger) -> bool:
-        if not self._channel_open.is_set():
-            try:
-                await asyncio.wait_for(self._channel_open.wait(), timeout=30)
-            except asyncio.TimeoutError:
-                pass
-            if not self._channel_open.is_set() or self._closed:
-                return False
-        try:
-            self.channel.send_pdu(data)
-            return True
-        except Exception as e:
-            logger.debug(f"_drain send_pdu failed: {type(e).__name__}: {e}")
-            self._shutdown_all()
-            return False
+            self._shutdown()
 
     async def _pump(self):
-        """Drain PDU queue and write to socketpair for server to recv."""
         try:
             while not self._closed:
                 pdu = await self._pdu_queue.get()
@@ -166,17 +104,27 @@ class _ChannelSocketBridge:
                     break
         except asyncio.CancelledError:
             pass
-        except Exception as e:
-            logging.getLogger("nxbt").debug(f"_pump crashed: {e}")
+        finally:
+            self._shutdown()
 
-    def close(self):
+    def _shutdown(self):
         if self._closed:
             return
         self._closed = True
         self._pdu_queue.put_nowait(None)
-        self._shutdown_all()
+        for s in (self._s1, self.socket):
+            try:
+                s.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
         self._drain_task.cancel()
         self._pump_task.cancel()
+        try:
+            self._s1.close()
+        except OSError:
+            pass
+
+    close = _shutdown
 
 
 class _BumbleSocket:
@@ -301,15 +249,12 @@ class BumbleBackend(Backend):
 
     @staticmethod
     def get_switch_addresses() -> list[str]:
-        async def _collect():
-            addresses = []
-            for path in JsonKeyStore().directory_name.iterdir():
-                keystore = JsonKeyStore(None, str(path))
-                entries = await keystore.get_all()
-                addresses += [entry[0].replace("/P", "") for entry in entries]
-            return addresses
-
-        return asyncio.run(_collect())
+        addresses = []
+        for path in JsonKeyStore().directory_name.iterdir():
+            keystore = JsonKeyStore(None, str(path))
+            entries = asyncio.run(keystore.get_all())
+            addresses += [entry[0].replace("/P", "") for entry in entries]
+        return addresses
 
     def __init__(
         self,
@@ -694,24 +639,21 @@ class BumbleBackend(Backend):
     def remove_bonded_device(self, address):
         """Remove pairing keys for *address* from the JsonKeyStore file."""
 
-        async def _del():
-            import json
+        import json
 
-            dir_path = JsonKeyStore().directory_name
-            for file_path in dir_path.iterdir():
-                with open(file_path, "r") as f:
-                    data = json.load(f)
-                for namespace in data:
-                    keystore = JsonKeyStore(namespace, str(file_path))
-                    try:
-                        await keystore.delete(address + "/P")
-                        self.logger.debug(
-                            f"Removed bonded device {address} from keystore {file_path}"
-                        )
-                    except KeyError:
-                        pass
-
-        return asyncio.run(_del())
+        dir_path = JsonKeyStore().directory_name
+        for file_path in dir_path.iterdir():
+            with open(file_path, "r") as f:
+                data = json.load(f)
+            for namespace in data:
+                keystore = JsonKeyStore(namespace, str(file_path))
+                try:
+                    self._run_async(keystore.delete(address + "/P"))
+                    self.logger.debug(
+                        f"Removed bonded device {address} from keystore {file_path}"
+                    )
+                except KeyError:
+                    pass
 
     def __del__(self):
         self._stop_event_loop()
