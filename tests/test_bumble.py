@@ -1,6 +1,7 @@
 #   Python test originally created or extracted from Hannah's work (https://github.com/hannahbee91/nxbt).
 #   Some modifications might have been made to adapt to my own project.
 
+import asyncio
 import sys
 import pytest
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,18 @@ if "dbus" not in sys.modules:
 
 from nxbt import PRO_CONTROLLER
 from nxbt.backends import BumbleBackend
+
+
+def _run_async_mock(coro):
+    """Mimics BumbleBackend._run_async: await a coroutine and return result."""
+    if asyncio.iscoroutine(coro):
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
+    # For mocked async methods (MagicMock), return directly
+    return coro
 
 
 class TestBumbleBackendAliases:
@@ -28,7 +41,7 @@ class TestBumbleBackendAliases:
 class TestBumbleBackendSetupHciToggle:
     """Test that _setup_async toggles the HCI adapter off when it's up."""
 
-    @patch("nxbt.backends.bumble.open_transport_or_link")
+    @patch("nxbt.backends.bumble.open_transport")
     @patch("nxbt.backends.bumble.JsonKeyStore")
     @patch("nxbt.backends.bumble.toggle_hci_adapter")
     @patch("nxbt.backends.bumble.get_hci_state")
@@ -54,7 +67,7 @@ class TestBumbleBackendSetupHciToggle:
         backend = BumbleBackend(adapter_idx="hci-socket:0")
         backend._start_event_loop = MagicMock()
         backend._stop_event_loop = MagicMock()
-        backend._run_async = MagicMock(side_effect=lambda coro: coro)
+        backend._run_async = MagicMock(side_effect=_run_async_mock)
         backend._build_sdp_record = MagicMock(return_value=[])
         backend.setup(PRO_CONTROLLER)
 
@@ -63,7 +76,7 @@ class TestBumbleBackendSetupHciToggle:
             f"Expected 1 toggle call (_setup_async), got {mock_toggle.call_count}"
         )
 
-    @patch("nxbt.backends.bumble.open_transport_or_link")
+    @patch("nxbt.backends.bumble.open_transport")
     @patch("nxbt.backends.bumble.JsonKeyStore")
     @patch("nxbt.backends.bumble.toggle_hci_adapter")
     @patch("nxbt.backends.bumble.get_hci_state")
@@ -89,7 +102,7 @@ class TestBumbleBackendSetupHciToggle:
         backend = BumbleBackend(adapter_idx="hci-socket:0")
         backend._start_event_loop = MagicMock()
         backend._stop_event_loop = MagicMock()
-        backend._run_async = MagicMock(side_effect=lambda coro: coro)
+        backend._run_async = MagicMock(side_effect=_run_async_mock)
         backend._build_sdp_record = MagicMock(return_value=[])
         backend.setup(PRO_CONTROLLER)
 
@@ -98,7 +111,7 @@ class TestBumbleBackendSetupHciToggle:
             f"Expected 0 toggle calls, got {mock_toggle.call_count}"
         )
 
-    @patch("nxbt.backends.bumble.open_transport_or_link")
+    @patch("nxbt.backends.bumble.open_transport")
     @patch("nxbt.backends.bumble.JsonKeyStore")
     @patch("nxbt.backends.bumble.toggle_hci_adapter")
     @patch("nxbt.backends.bumble.get_hci_state")
@@ -123,7 +136,7 @@ class TestBumbleBackendSetupHciToggle:
         backend = BumbleBackend(adapter_idx="usb:0")
         backend._start_event_loop = MagicMock()
         backend._stop_event_loop = MagicMock()
-        backend._run_async = MagicMock(side_effect=lambda coro: coro)
+        backend._run_async = MagicMock(side_effect=_run_async_mock)
         backend._build_sdp_record = MagicMock(return_value=[])
         backend.setup(PRO_CONTROLLER)
 

@@ -19,6 +19,9 @@ class TestNxbt:
         mock_backend = MagicMock()
         mock_backend.get_available_adapters.return_value = ["hci0"]
         mock_backend.get_switch_addresses.return_value = []
+        # type(mock_backend) == MagicMock, so set methods on the class too
+        MagicMock.get_available_adapters = mock_backend.get_available_adapters
+        MagicMock.get_switch_addresses = mock_backend.get_switch_addresses
 
         with (
             patch("nxbt.nxbt.Process") as mock_process,
