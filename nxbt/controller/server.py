@@ -125,7 +125,7 @@ class ControllerServer:
 
             self.state["state"] = "connected"
             if paired:
-                self.input.buffer_macro("A 0.1s", os.urandom(24).hex())
+                self.input.buffer_macro("B 0.1s", os.urandom(24).hex())
             self.mainloop(itr, ctrl)
 
         except KeyboardInterrupt:
