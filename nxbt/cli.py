@@ -417,8 +417,6 @@ def list_switch_addresses(args):
 
 
 def main(args=None):
-    import multiprocessing
-    multiprocessing.set_start_method('fork', force=True)
     args = parser.parse_args(args)
     # Bumble backend need public address to reconnect
     if not args.backend or args.backend == "bumble":
