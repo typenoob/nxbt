@@ -277,7 +277,6 @@ class ControllerServer:
                     self.lock.acquire()
                 try:
                     itr, ctrl = self.reconnect(self.switch_address)
-                    self._run_pairing_handshake(itr)
                     self.state["state"] = "connected"
                     return itr, ctrl
                 finally:
