@@ -119,7 +119,7 @@ class ControllerServer:
                 if type(self.backend) is backend_cls:
                     continue
                 try:
-                    backend_cls().remove_bonded_device(self.switch_address)
+                    backend_cls.remove_bonded_device(self.switch_address)
                 except Exception as e:
                     self.logger.debug(f"Failed to remove bond from {name}: {e}")
 

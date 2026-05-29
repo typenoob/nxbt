@@ -657,7 +657,8 @@ class BumbleBackend(Backend):
             reconnect_address,
         )
 
-    def remove_bonded_device(self, address):
+    @classmethod
+    def remove_bonded_device(address):
         """Remove pairing keys for *address* from the JsonKeyStore file."""
 
         import json
@@ -669,10 +670,8 @@ class BumbleBackend(Backend):
             for namespace in data:
                 keystore = JsonKeyStore(namespace, str(file_path))
                 try:
-                    self._run_async(keystore.delete(address + "/P"))
-                    self.logger.debug(
-                        f"Removed bonded device {address} from keystore {file_path}"
-                    )
+                    asyncio.run(keystore.delete(address + "/P"))
+                    logging.getLogger("nxbt").info(f"Removed bonded device {address}")
                 except KeyError:
                     pass
 

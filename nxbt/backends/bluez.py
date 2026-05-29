@@ -156,7 +156,8 @@ class BlueZBackend(Backend):
             reconnect_address,
         )
 
-    def remove_bonded_device(self, address):
+    @classmethod
+    def remove_bonded_device(address):
         bt_dir = Path("/var/lib/bluetooth")
         if not bt_dir.exists():
             return
