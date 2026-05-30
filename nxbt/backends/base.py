@@ -28,7 +28,7 @@ class Backend(ABC):
     def reconnect(self, address) -> tuple:
         """Reconnect to a known address. Returns (itr_socket, ctrl_socket)."""
 
-    @classmethod
+    @staticmethod
     @abstractmethod
     def remove_bonded_device(address):
         """Remove a bonded Nintendo Switch device from the host's Bluetooth bond list.

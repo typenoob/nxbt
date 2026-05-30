@@ -657,7 +657,7 @@ class BumbleBackend(Backend):
             reconnect_address,
         )
 
-    @classmethod
+    @staticmethod
     def remove_bonded_device(address):
         """Remove pairing keys for *address* from the JsonKeyStore file."""
 
