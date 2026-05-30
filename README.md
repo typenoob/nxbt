@@ -12,7 +12,9 @@ I started this as a fork of the original project. Once it reaches sufficient mat
 - [x] Use pyproject.toml and uv to manage the package and requirements
 - [ ] Fix webapp unexpected behaviors
 - [x] Use [bumble](https://github.com/google/bumble) to rewrite the repo
-- [ ] Add Windows support for generic USB drivers through [zadig](https://zadig.akeo.ie/), such as [WinUSB](https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/introduction-to-winusb-for-developers)
+- [x] Add Windows support for generic USB drivers through [zadig](https://zadig.akeo.ie/), such as [WinUSB](https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/introduction-to-winusb-for-developers)
+-[ ] Add native GUI for webapp using pywebview
+-[ ] Add Android support
 
 ## Quick Start
 
