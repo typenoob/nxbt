@@ -134,6 +134,8 @@ class ControllerServer:
             try:
                 self.state["state"] = "crashed"
                 self.state["errors"] = traceback.format_exc()
+                self.logger.debug("Error during connecting:")
+                self.logger.debug(self.state["errors"])
                 return self.state
             except Exception as e:
                 self.logger.debug("Error during graceful shutdown:")
@@ -204,9 +206,9 @@ class ControllerServer:
                     self.tick = 0
             except BlockingIOError:
                 continue
-            except OSError as e:
+            except OSError:
                 # Attempt to reconnect to the Switch
-                itr, ctrl = self.save_connection(e)
+                itr, ctrl = self.save_connection()
             # Figure out how long it took to process commands
             duration_end = time.perf_counter()
             duration_elapsed = duration_end - duration_start
@@ -262,7 +264,7 @@ class ControllerServer:
             else:
                 time.sleep(1 / 15)
 
-    def save_connection(self, error, state=None):  # state kept for API compat
+    def save_connection(self):
         while self.reconnect_counter < 2:
             try:
                 self.logger.debug("Attempting to reconnect")
@@ -282,9 +284,9 @@ class ControllerServer:
                 finally:
                     if self.lock:
                         self.lock.release()
-            except OSError:
+            except OSError as e:
                 self.reconnect_counter += 1
-                self.logger.debug(error)
+                self.logger.debug(e)
                 time.sleep(0.5)
 
         self.logger.debug("Connecting to any Switch")
