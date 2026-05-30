@@ -12,6 +12,7 @@ from shutil import which
 if platform.system() == "Linux":
     from dbus_fast import BusType, Message, Variant
     from dbus_fast.aio.message_bus import MessageBus
+    from dbus_fast.service import ServiceInterface, method
 
 AGENT_PATH = "/nxbt/agent"
 
@@ -663,8 +664,18 @@ class BlueZ:
         if getattr(self, "_agent_thread", None) is not None:
             return  # already running
 
+        class Agent(ServiceInterface):
+            def __init__(self):
+                super().__init__("org.bluez.Agent1")
+
+            @method()
+            def Release(self):
+                pass
+
         async def _run_agent():
             bus = await MessageBus(bus_type=BusType.SYSTEM).connect()
+            agent = Agent()
+            bus.export(AGENT_PATH, agent)
             msg = Message(
                 destination=SERVICE_NAME,
                 path=BLUEZ_OBJECT_PATH,
