@@ -11,16 +11,24 @@
 # nuitka-project: --include-data-dir=./nxbt/web/static=nxbt/web/static
 # nuitka-project: --include-data-dir=./nxbt/web/templates=nxbt/web/templates
 # nuitka-project: --remove-output
-# nuitka-project: --nofollow-import-to=bumble.hci
 # nuitka-project: --nofollow-import-to=cython
 # nuitka-project: --nofollow-import-to=setuptools
+# nuitka-project: --nofollow-import-to=grpc
 
+import sys
+import importlib
+
+# Using Cython to speed up compile time
+# nuitka-project: --nofollow-import-to=bumble.hci
+sys.modules["bumble.hci"] = importlib.import_module("lib.bumble.hci")
+# nuitka-project: --nofollow-import-to=bumble.l2cap
+sys.modules["bumble.l2cap"] = importlib.import_module("lib.bumble.l2cap")
+# nuitka-project: --nofollow-import-to=Xlib.protocol.request
+sys.modules["Xlib.protocol.request"] = importlib.import_module(
+    "lib.Xlib.protocol.request"
+)
 
 from nxbt.cli import main
-import sys
-from lib.bumble import hci
-
-sys.modules["bumble.hci"] = hci
 
 if __name__ == "__main__":
     main()
