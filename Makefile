@@ -13,8 +13,10 @@ install-deps:
 		echo "Unsupported OS. Only Debian, Ubuntu and Alpine are supported. Skipping dependency installation."; \
 	fi
 
-build:
+prepare:
 	@uv run lib/setup.py build_ext --inplace
+
+build: prepare
 	@uv run --no-managed-python nuitka nxbt
 
 install:
