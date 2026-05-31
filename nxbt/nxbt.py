@@ -137,7 +137,6 @@ class Nxbt:
         log_to_file=False,
         disable_logging=False,
         backend=None,
-        adapter_idx=None,
     ):
         """Initializes the necessary multiprocessing resources and starts
         the multiprocessing processes.
@@ -150,10 +149,7 @@ class Nxbt:
         :type log_to_file: bool, optional
         :param disable_logging: Routes all logging calls to a null log handler.
         :type disable_logging: bool, optional, defaults to False.
-        :param backend: A Backend subclass (or instance for compatibility).
-        Defaults to BumbleBackend.
-        :param adapter_idx: A backend-specific adapter identifier.
-        Defaults to None (auto-select first available).
+        :param backend: A Backend subclass, defaults to BumbleBackend.
         """
 
         self.debug = debug
@@ -167,15 +163,9 @@ class Nxbt:
         if backend is None:
             from .backends import BumbleBackend
 
-            self._backend_cls = BumbleBackend
-            self._adapter_idx = adapter_idx
-        elif isinstance(backend, type):
-            self._backend_cls = backend
-            self._adapter_idx = adapter_idx
+            self._backend = BumbleBackend
         else:
-            # Instance provided (often for tests); store class for later
-            self._backend_cls = type(backend)
-            self._adapter_idx = getattr(backend, "_transport_spec", adapter_idx)
+            self._backend = backend
 
         # Main queue for nbxt tasks
         self.task_queue = Queue()
@@ -208,8 +198,7 @@ class Nxbt:
                 self.task_queue,
                 self.manager_state,
                 self._bluetooth_lock,
-                self._backend_cls,
-                self._backend_kwargs(),
+                self._backend,
                 self.debug,
                 self.log_to_file,
             ),
@@ -219,10 +208,6 @@ class Nxbt:
         # we need to cleanup on exit.
         self.controllers.daemon = False
         self.controllers.start()
-
-    def _backend_kwargs(self):
-        """Return kwargs for backend instantiation in the current process."""
-        return {"adapter_idx": self._adapter_idx} if self._adapter_idx else {}
 
     def _on_exit(self):
         """The exit handler function used with the atexit module.
@@ -262,8 +247,7 @@ class Nxbt:
         task_queue,
         state,
         bluetooth_lock,
-        backend_cls,
-        backend_kwargs=None,
+        backend,
         debug=False,
         log_to_file=False,
     ):
@@ -279,13 +263,11 @@ class Nxbt:
         emulated controllers.
         :type state: multiprocessing.Manager().dict
         :param bluetooth_lock: A lock to synchronize Bluetooth actions
-        :param backend_cls: Backend subclass to instantiate
-        :param backend_kwargs: Backend-specific constructor kwargs
+        :param backend: Backend subclass to instantiate
         :param debug: Enable debug logging
         :param log_to_file: Enable logging to file
         """
 
-        backend = backend_cls(**(backend_kwargs or {}))
         cm = _ControllerManager(state, bluetooth_lock, backend)
         # Ignore SIGINT in the child — only the parent handles Ctrl+C.
         signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -751,7 +733,7 @@ class Nxbt:
         :rtype: list
         """
 
-        return self._backend_cls.get_available_adapters()
+        return self._backend.get_available_adapters()
 
     def get_switch_addresses(self):
         """Gets the Bluetooth MAC addresses of all
@@ -761,7 +743,7 @@ class Nxbt:
         :rtype: list
         """
 
-        return self._backend_cls.get_switch_addresses()
+        return self._backend.get_switch_addresses()
 
     @property
     def state(self):
@@ -866,7 +848,7 @@ class _ControllerManager:
         self.state[index] = controller_state
         server = ControllerServer(
             controller_type,
-            backend=self.backend,
+            backend=self.backend(adapter_path),
             lock=self.lock,
             state=controller_state,
             task_queue=controller_queue,

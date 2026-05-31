@@ -205,7 +205,7 @@ def check_bluetooth_address(address):
 
 
 def make_backend(args):
-    return BACKENDS[args.backend]()
+    return BACKENDS[args.backend]
 
 
 def get_reconnect_target(args):
@@ -234,10 +234,8 @@ def demo(args):
         debug=args.debug,
         log_to_file=args.logfile,
         backend=backend,
-        adapter_idx=adapters[0],
     )
     reconnect_target = get_reconnect_target(args)
-
     index = nx.create_controller(
         PRO_CONTROLLER,
         adapters[0],
@@ -271,7 +269,6 @@ def test(args):
             debug=args.debug,
             log_to_file=args.logfile,
             backend=backend,
-            adapter_idx=adapters[0] if adapters else None,
         )
     except Exception as e:
         print("Failed to initialize:")
@@ -370,7 +367,6 @@ def macro(args):
         debug=args.debug,
         log_to_file=args.logfile,
         backend=backend,
-        adapter_idx=adapter,
     )
     reconnect_target = get_reconnect_target(args)
 
