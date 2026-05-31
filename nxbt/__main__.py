@@ -11,10 +11,9 @@
 # nuitka-project: --include-data-dir=./nxbt/web/static=nxbt/web/static
 # nuitka-project: --include-data-dir=./nxbt/web/templates=nxbt/web/templates
 # nuitka-project: --remove-output
-# nuitka-project: --nofollow-import-to=cython
-# nuitka-project: --nofollow-import-to=setuptools
 # nuitka-project: --nofollow-import-to=grpc
 
+from nxbt.cli import main
 import sys
 import importlib
 
@@ -28,7 +27,6 @@ sys.modules["Xlib.protocol.request"] = importlib.import_module(
     "lib.Xlib.protocol.request"
 )
 
-from nxbt.cli import main
 
 if __name__ == "__main__":
     main()
