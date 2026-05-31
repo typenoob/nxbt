@@ -21,10 +21,6 @@ import importlib
 sys.modules["bumble.hci"] = importlib.import_module("lib.bumble.hci")
 # nuitka-project: --nofollow-import-to=bumble.l2cap
 sys.modules["bumble.l2cap"] = importlib.import_module("lib.bumble.l2cap")
-# nuitka-project: --nofollow-import-to=Xlib.protocol.request
-sys.modules["Xlib.protocol.request"] = importlib.import_module(
-    "lib.Xlib.protocol.request"
-)
 
 
 if __name__ == "__main__":

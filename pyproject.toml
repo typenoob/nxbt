@@ -35,7 +35,6 @@ dependencies = [
     "dbus-fast==2.45.1",
     "bumble==0.0.229",
     "loguru>=0.7.0",
-    "python-xlib==0.33",
 ]
 
 [project.optional-dependencies]

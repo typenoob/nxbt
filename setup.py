@@ -21,10 +21,6 @@ setup(
                 "lib.bumble.l2cap",
                 sources=["lib/bumble/l2cap.pyx"],
             ),
-            Extension(
-                "lib.Xlib.protocol.request",
-                sources=["lib/Xlib/protocol/request.pyx"],
-            ),
         ]
     ),
 )

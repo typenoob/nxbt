@@ -971,7 +971,6 @@ dependencies = [
     { name = "loguru" },
     { name = "psutil" },
     { name = "pynput" },
-    { name = "python-xlib" },
     { name = "werkzeug" },
 ]
 
@@ -1003,7 +1002,6 @@ requires-dist = [
     { name = "psutil", specifier = "==7.2.1" },
     { name = "pynput", specifier = "==1.6.8" },
     { name = "pytest", marker = "extra == 'dev'" },
-    { name = "python-xlib", specifier = "==0.33" },
     { name = "werkzeug", specifier = "==3.1.0" },
 ]
 provides-extras = ["dev"]
