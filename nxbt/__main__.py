@@ -13,7 +13,6 @@
 # nuitka-project: --remove-output
 # nuitka-project: --nofollow-import-to=grpc
 
-from nxbt.cli import main
 import sys
 import importlib
 
@@ -29,4 +28,6 @@ sys.modules["Xlib.protocol.request"] = importlib.import_module(
 
 
 if __name__ == "__main__":
+    from nxbt.cli import main
+
     main()
