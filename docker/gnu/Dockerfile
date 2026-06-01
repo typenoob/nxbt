@@ -11,11 +11,8 @@ RUN sed -i 's|http://deb.debian.org/|https://mirrors.ustc.edu.cn/|g' /etc/apt/so
 RUN echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99-no-ssl-verify
 RUN apt update
 
-# # Install Make
+# Install Make
 RUN apt install -y make
-
-# # Install Python
-RUN apt install -y python3
 
 RUN make && make install
 
