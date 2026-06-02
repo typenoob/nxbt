@@ -115,7 +115,7 @@ def start_web_app(
     ip="0.0.0.0", port=8000, usessl=False, cert_path=None, debug=False, backend="bumble"
 ):
     global nxbt
-    nxbt = Nxbt(debug=debug, backend=BACKENDS[backend]())
+    nxbt = Nxbt(debug=debug, backend=BACKENDS[backend])
     if usessl:
         if cert_path is None:
             # Store certs in the package directory
