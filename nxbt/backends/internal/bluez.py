@@ -7,7 +7,8 @@ import threading
 import time
 import platform
 from pathlib import Path
-from shutil import which
+
+from .tools import has_tool, require_tool, run_command
 
 if platform.system() == "Linux":
     from dbus_fast import BusType, Message, Variant
@@ -189,7 +190,7 @@ def toggle_clean_bluez(toggle):
     logger = logging.getLogger("nxbt")
 
     # Check systemd is present
-    res = _run_command(["ps", "--no-headers", "-o", "comm", "1"])
+    res = run_command(["ps", "--no-headers", "-o", "comm", "1"])
     if res.stdout.decode("utf-8").strip() != "systemd":
         logger.debug("systemd not found")
         return
@@ -223,10 +224,10 @@ def toggle_clean_bluez(toggle):
             return
 
     # Reload units
-    _run_command(["systemctl", "daemon-reload"])
+    run_command(["systemctl", "daemon-reload"])
 
     # Reload the bluetooth service with input disabled
-    _run_command(["systemctl", "restart", "bluetooth"])
+    run_command(["systemctl", "restart", "bluetooth"])
 
     # Kill a bit of time here to ensure all services have restarted
     time.sleep(0.5)
@@ -240,8 +241,7 @@ def get_hci_state(hci_id):
     :return: True if adapter is UP, False if DOWN
     :raises Exception: If hciconfig is missing or command fails
     """
-    if which("hciconfig") is None:
-        raise Exception("hciconfig is not available on this system.")
+    require_tool("hciconfig")
     result = subprocess.run(
         ["hciconfig", f"hci{hci_id}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
@@ -258,13 +258,9 @@ def toggle_hci_adapter(hci_id, down=True):
     :param down: True to bring down, False to bring up
     :raises Exception: If hciconfig is missing or command fails
     """
-    if which("hciconfig") is None:
-        raise Exception(
-            "hciconfig is not available on this system."
-            + "If you can, please install this tool."
-        )
+    require_tool("hciconfig")
     action = "down" if down else "up"
-    _run_command(["hciconfig", f"hci{hci_id}", action])
+    run_command(["hciconfig", f"hci{hci_id}", action])
     logger = logging.getLogger("nxbt")
     logger.debug(f"hci{hci_id} brought {action}")
 
@@ -279,19 +275,14 @@ def clean_sdp_records():
     # UnregisterProfile interface.
 
     # Check if sdptool is available for use
-    if which("sdptool") is None:
-        raise Exception(
-            "sdptool is not available on this system."
-            + "If you can, please install this tool, as "
-            + "it is required for proper functionality."
-        )
+    require_tool("sdptool")
 
     # Enable Read/Write to the SDP server. This is a remedy for a
     # compatibility mode bug introduced in later versions of BlueZ 5
-    _run_command(["chmod", "777", "/var/run/sdp"])
+    run_command(["chmod", "777", "/var/run/sdp"])
 
     # Identify/List all SDP services available with sdptool
-    result = _run_command(["sdptool", "browse", "local"]).stdout.decode("utf-8")
+    result = run_command(["sdptool", "browse", "local"]).stdout.decode("utf-8")
     if result is None or len(result.split("\n\n")) < 1:
         return
 
@@ -316,26 +307,7 @@ def clean_sdp_records():
     # Delete all found service records
     if len(service_rec_handles) > 0:
         for record_handle in service_rec_handles:
-            _run_command(["sdptool", "del", record_handle])
-
-
-def _run_command(command):
-    """Runs a specified command on the shell of the system.
-    If the command is run unsuccessfully, an error is raised.
-    The command must be in the form of an array with each term
-    individually listed. Eg: ["which", "bash"]
-
-    :param command: A list of command terms
-    :type command: list
-    :raises Exception: On command failure or error
-    """
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    cmd_err = result.stderr.decode("utf-8").replace("\n", "")
-    if cmd_err != "":
-        raise Exception(cmd_err)
-
-    return result
+            run_command(["sdptool", "del", record_handle])
 
 
 def get_random_controller_mac():
@@ -363,18 +335,8 @@ def replace_mac_addresses(adapter_paths, addresses):
     defaults to False
     :type addresses: bool, optional
     """
-    if which("hcitool") is None:
-        raise Exception(
-            "hcitool is not available on this system."
-            + "If you can, please install this tool, as "
-            + "it is required for proper functionality."
-        )
-    if which("hciconfig") is None:
-        raise Exception(
-            "hciconfig is not available on this system."
-            + "If you can, please install this tool, as "
-            + "it is required for proper functionality."
-        )
+    require_tool("hcitool")
+    require_tool("hciconfig")
 
     if addresses:
         assert len(addresses) == len(adapter_paths)
@@ -396,8 +358,8 @@ def replace_mac_addresses(adapter_paths, addresses):
             f"0x{mac[1]}",
             f"0x{mac[0]}",
         ]
-        _run_command(cmds)
-        _run_command(["hciconfig", adapter_id, "reset"])
+        run_command(cmds)
+        run_command(["hciconfig", adapter_id, "reset"])
 
 
 def find_devices_by_alias(alias, return_path=False, created_bus=None):
@@ -559,12 +521,7 @@ class BlueZ:
         :raises PermissionError: On run as non-root user
         :raises Exception: On CLI errors
         """
-        if which("hcitool") is None:
-            raise Exception(
-                "hcitool is not available on this system."
-                + "If you can, please install this tool, as "
-                + "it is required for proper functionality."
-            )
+        require_tool("hcitool")
         # Reverse MAC (element position-wise) for use with hcitool
         mac = mac.split(":")
         cmds = [
@@ -581,26 +538,16 @@ class BlueZ:
             f"0x{mac[1]}",
             f"0x{mac[0]}",
         ]
-        _run_command(cmds)
-        _run_command(["hciconfig", self.device_id, "reset"])
+        run_command(cmds)
+        run_command(["hciconfig", self.device_id, "reset"])
 
     def set_class(self, device_class):
-        if which("hciconfig") is None:
-            raise Exception(
-                "hciconfig is not available on this system."
-                + "If you can, please install this tool, as "
-                + "it is required for proper functionality."
-            )
-        _run_command(["hciconfig", self.device_id, "class", device_class])
+        require_tool("hciconfig")
+        run_command(["hciconfig", self.device_id, "class", device_class])
 
     def reset_adapter(self):
-        if which("hciconfig") is None:
-            raise Exception(
-                "hciconfig is not available on this system."
-                + "If you can, please install this tool, as "
-                + "it is required for proper functionality."
-            )
-        _run_command(["hciconfig", self.device_id, "reset"])
+        require_tool("hciconfig")
+        run_command(["hciconfig", self.device_id, "reset"])
 
     @property
     def name(self):

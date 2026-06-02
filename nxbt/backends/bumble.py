@@ -14,6 +14,7 @@ from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport
 
 from .internal.bluez import get_hci_state, toggle_hci_adapter
+from .internal.tools import get_blocked_hci_indices
 
 from ..controller.controller import ControllerTypes
 from ..controller.sdp import SWITCH_CONTROLLER_SDP
@@ -183,29 +184,22 @@ class BumbleBackend(Backend):
         """Scan for HCI adapters via HCI sockets or USB."""
         adapters = []
 
-        import glob
-        import os
         import platform
 
-        if platform.system() == "Linux":
-            for entry in os.listdir("/sys/class/bluetooth/"):
-                if not entry.startswith("hci"):
+        if platform.system() == "Linux" and hasattr(socket, "AF_BLUETOOTH"):
+            blocked = get_blocked_hci_indices()
+            for dev_id in range(32):
+                if dev_id in blocked:
                     continue
-                idx = entry.replace("hci", "")
-                # Check rfkill state — adapter must not be soft or hard blocked
-                blocked = False
-                for rfkill_state in glob.glob(
-                    f"/sys/class/bluetooth/{entry}/rfkill*/state"
-                ):
-                    try:
-                        with open(rfkill_state) as f:
-                            if f.read().strip() == "0":
-                                blocked = True
-                                break
-                    except OSError:
-                        pass
-                if not blocked:
-                    adapters.append(f"hci-socket:{idx}")
+                try:
+                    s = socket.socket(
+                        socket.AF_BLUETOOTH, socket.SOCK_RAW, socket.BTPROTO_HCI
+                    )
+                    s.bind((dev_id,))
+                    adapters.append(f"hci-socket:{dev_id}")
+                    s.close()
+                except OSError:
+                    break
 
         # Scan for USB Bluetooth adapters as fallback
         try:
