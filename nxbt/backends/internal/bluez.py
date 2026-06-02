@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 import platform
+import btmgmt
 from pathlib import Path
 
 from .tools import has_tool, require_tool, run_command
@@ -241,12 +242,8 @@ def get_hci_state(hci_id):
     :return: True if adapter is UP, False if DOWN
     :raises Exception: If hciconfig is missing or command fails
     """
-    require_tool("hciconfig")
-    result = subprocess.run(
-        ["hciconfig", f"hci{hci_id}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
-    output = result.stdout.decode("utf-8")
-    return "UP RUNNING" in output
+    _, output = btmgmt.command_str(f"--index={hci_id}", "info")
+    return "powered" in output
 
 
 def toggle_hci_adapter(hci_id, down=True):
@@ -258,11 +255,12 @@ def toggle_hci_adapter(hci_id, down=True):
     :param down: True to bring down, False to bring up
     :raises Exception: If hciconfig is missing or command fails
     """
-    require_tool("hciconfig")
-    action = "down" if down else "up"
-    run_command(["hciconfig", f"hci{hci_id}", action])
+    if down:
+        btmgmt.command(f"--index={hci_id}", "power", "off")
+    else:
+        btmgmt.command(f"--index={hci_id}", "power", "on")
     logger = logging.getLogger("nxbt")
-    logger.debug(f"hci{hci_id} brought {action}")
+    logger.debug(f"hci{hci_id} brought {'down' if down else 'up'}")
 
 
 def clean_sdp_records():

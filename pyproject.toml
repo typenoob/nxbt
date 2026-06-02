@@ -35,6 +35,7 @@ dependencies = [
     "dbus-fast==2.45.1",
     "bumble==0.0.229",
     "loguru>=0.7.0",
+    "btmgmt>=1.1.0",
 ]
 
 [project.optional-dependencies]
