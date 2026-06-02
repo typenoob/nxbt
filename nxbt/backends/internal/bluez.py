@@ -1,3 +1,7 @@
+"""
+Only works on Linux with Dbus and BlueZ.
+"""
+
 import asyncio
 import logging
 import os
@@ -5,16 +9,14 @@ import random
 import subprocess
 import threading
 import time
-import platform
 import btmgmt
 from pathlib import Path
 
-from .tools import has_tool, require_tool, run_command
+from .tools import require_tool, run_command
 
-if platform.system() == "Linux":
-    from dbus_fast import BusType, Message, Variant
-    from dbus_fast.aio.message_bus import MessageBus
-    from dbus_fast.service import ServiceInterface, method
+from dbus_fast import BusType, Message, Variant
+from dbus_fast.aio.message_bus import MessageBus
+from dbus_fast.service import ServiceInterface, method
 
 AGENT_PATH = "/nxbt/agent"
 
@@ -175,8 +177,6 @@ def find_objects(service_name, interface_name):
 
 def toggle_clean_bluez(toggle):
     """Enables or disables all BlueZ plugins,
-    BlueZ compatibility mode, and removes all extraneous
-    SDP Services offered.
     Requires root user to be run. The units and Bluetooth
     service will not be restarted if the input plugin
     already matches the toggle.
@@ -186,7 +186,6 @@ def toggle_clean_bluez(toggle):
     :type toggle: boolean
     :raises PermissionError: If the user is not root
     :raises Exception: If the units can't be reloaded
-    :raises Exception: If sdptool, hciconfig, or hcitool are not available.
     """
     logger = logging.getLogger("nxbt")
 
@@ -195,7 +194,7 @@ def toggle_clean_bluez(toggle):
     if res.stdout.decode("utf-8").strip() != "systemd":
         logger.debug("systemd not found")
         return
-    service_path = "/lib/systemd/system/bluetooth.service"
+
     override_dir = Path("/run/systemd/system/bluetooth.service.d")
     override_path = override_dir / "nxbt.conf"
 
@@ -204,15 +203,7 @@ def toggle_clean_bluez(toggle):
             # Override exist, no need to restart bluetooth
             return
 
-        with open(service_path, encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("ExecStart="):
-                    exec_start = line.strip() + " --compat --noplugin=*"
-                    break
-            else:
-                raise Exception("systemd service file doesn't have a ExecStart line")
-
-        override = f"[Service]\nExecStart=\n{exec_start}"
+        override = f"[Service]\nExecStart=\nExecStart=bluetoothd --noplugin=*"
 
         override_dir.mkdir(parents=True, exist_ok=True)
         with override_path.open("w") as f:
@@ -236,24 +227,22 @@ def toggle_clean_bluez(toggle):
 
 
 def get_hci_state(hci_id):
-    """Get the up/down state of an HCI adapter via hciconfig.
+    """Get the up/down state of an HCI adapter via btmgmt.
 
     :param hci_id: The HCI adapter index (e.g., 0 for hci0)
     :return: True if adapter is UP, False if DOWN
-    :raises Exception: If hciconfig is missing or command fails
     """
     _, output = btmgmt.command_str(f"--index={hci_id}", "info")
     return "powered" in output
 
 
 def toggle_hci_adapter(hci_id, down=True):
-    """Brings an HCI adapter down or up using hciconfig.
+    """Brings an HCI adapter down or up using btmgmt.
     Useful for releasing/reacquiring exclusive HCI_CHANNEL_USER
     without restarting bluetoothd.
 
     :param hci_id: The HCI adapter index (e.g., 0 for hci0)
     :param down: True to bring down, False to bring up
-    :raises Exception: If hciconfig is missing or command fails
     """
     if down:
         btmgmt.command(f"--index={hci_id}", "power", "off")
@@ -318,46 +307,6 @@ def get_random_controller_mac():
         return str(hex_number)
 
     return f"7C:BB:8A:{seg()}:{seg()}:{seg()}"
-
-
-def replace_mac_addresses(adapter_paths, addresses):
-    """Replaces a list of adapter's Bluetooth MAC addresses
-    with Switch-compliant Controller MAC addresses. If the
-    addresses argument is specified, the adapter path's
-    MAC addresses will be reset to respective (index-wise)
-    address in the list.
-
-    :param adapter_paths: A list of Bluetooth adapter paths
-    :type adapter_paths: list
-    :param addresses: A list of Bluetooth MAC addresses,
-    defaults to False
-    :type addresses: bool, optional
-    """
-    require_tool("hcitool")
-    require_tool("hciconfig")
-
-    if addresses:
-        assert len(addresses) == len(adapter_paths)
-
-    for i in range(len(adapter_paths)):
-        adapter_id = adapter_paths[i].split("/")[-1]
-        mac = addresses[i].split(":")
-        cmds = [
-            "hcitool",
-            "-i",
-            adapter_id,
-            "cmd",
-            "0x3f",
-            "0x001",
-            f"0x{mac[5]}",
-            f"0x{mac[4]}",
-            f"0x{mac[3]}",
-            f"0x{mac[2]}",
-            f"0x{mac[1]}",
-            f"0x{mac[0]}",
-        ]
-        run_command(cmds)
-        run_command(["hciconfig", adapter_id, "reset"])
 
 
 def find_devices_by_alias(alias, return_path=False, created_bus=None):
@@ -508,10 +457,8 @@ class BlueZ:
         return self._prop("Address").upper()
 
     def set_address(self, mac):
-        """Sets the Bluetooth MAC address of the Bluetooth adapter.
-        The hciconfig CLI is required for setting the address.
-        For changes to apply, the Bluetooth interface needs to be
-        restarted.
+        """Sets the Bluetooth MAC address of the Bluetooth adapter via btmgmt.
+        For changes to apply, the adapter is power-cycled.
 
         :param mac: A Bluetooth MAC address in
         the form of "XX:XX:XX:XX:XX:XX
@@ -519,33 +466,22 @@ class BlueZ:
         :raises PermissionError: On run as non-root user
         :raises Exception: On CLI errors
         """
-        require_tool("hcitool")
-        # Reverse MAC (element position-wise) for use with hcitool
-        mac = mac.split(":")
-        cmds = [
-            "hcitool",
-            "-i",
-            self.device_id,
-            "cmd",
-            "0x3f",
-            "0x001",
-            f"0x{mac[5]}",
-            f"0x{mac[4]}",
-            f"0x{mac[3]}",
-            f"0x{mac[2]}",
-            f"0x{mac[1]}",
-            f"0x{mac[0]}",
-        ]
-        run_command(cmds)
-        run_command(["hciconfig", self.device_id, "reset"])
+        btmgmt.command(f"--index={self.device_id}", "public-addr", mac)
+        # Power-cycle adapter so the new address takes effect
+        btmgmt.command(f"--index={self.device_id}", "power", "off")
+        btmgmt.command(f"--index={self.device_id}", "power", "on")
 
     def set_class(self, device_class):
-        require_tool("hciconfig")
-        run_command(["hciconfig", self.device_id, "class", device_class])
+        """Set the device major/minor class via btmgmt."""
+        cls = int(device_class, 16)
+        major = (cls >> 8) & 0x1F
+        minor = cls & 0xFF
+        btmgmt.command(f"--index={self.device_id}", "class", str(major), str(minor))
 
     def reset_adapter(self):
-        require_tool("hciconfig")
-        run_command(["hciconfig", self.device_id, "reset"])
+        """Power-cycle the HCI adapter via btmgmt."""
+        btmgmt.command(f"--index={self.device_id}", "power", "off")
+        btmgmt.command(f"--index={self.device_id}", "power", "on")
 
     @property
     def name(self):
@@ -719,15 +655,13 @@ class BlueZ:
         :rtype: string
         """
 
-        # This is another hacky bit. We're using hciconfig here instead
-        # of the D-Bus API so that results match the setter. See the
-        # setter for further justification on using hciconfig.
-        result = subprocess.run(
-            ["hciconfig", self.device_id, "class"], stdout=subprocess.PIPE
-        )
-        device_class = result.stdout.decode("utf-8").split("Class: ")[1][0:8]
-
-        return device_class
+        _, output = btmgmt.command_str(f"--index={self.device_id}", "info")
+        # btmgmt info output contains a "Class:" line like:
+        #   Class: 0x002508
+        for line in output.split("\n"):
+            if "Class:" in line:
+                return line.split("Class:")[1].strip()[:8]
+        return "00000000"
 
     def set_device_class(self, device_class):
         """Sets the Bluetooth class of the device. This represents what type
@@ -748,17 +682,9 @@ class BlueZ:
         if len(device_class) != 8:
             raise ValueError("Device class must be length 8")
 
-        # This is a bit of a hack. BlueZ allows you to set this value, however,
-        # a config file needs to filled and the BT daemon restarted. This is a
-        # good compromise but requires super user privileges. Not ideal.
-        result = subprocess.run(
-            ["hciconfig", self.device_id, "class", device_class], stderr=subprocess.PIPE
-        )
-
-        # Checking if there was a problem setting the device class
-        cmd_err = result.stderr.decode("utf-8").replace("\n", "")
-        if cmd_err != "":
-            raise Exception(cmd_err)
+        major = (int(device_class, 16) >> 8) & 0x1F
+        minor = int(device_class, 16) & 0xFF
+        btmgmt.command(f"--index={self.device_id}", "class", str(major), str(minor))
 
     @property
     def powered(self):

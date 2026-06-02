@@ -184,9 +184,7 @@ class BumbleBackend(Backend):
         """Scan for HCI adapters via HCI sockets or USB."""
         adapters = []
 
-        import platform
-
-        if platform.system() == "Linux" and hasattr(socket, "AF_BLUETOOTH"):
+        if hasattr(socket, "AF_BLUETOOTH"):
             blocked = get_blocked_hci_indices()
             for dev_id in range(32):
                 if dev_id in blocked:

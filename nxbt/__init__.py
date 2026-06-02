@@ -1,17 +1,11 @@
 __version__ = "0.1.0"
 
-import platform
-
 from .controller import ControllerServer
 from .controller import ControllerProtocol
 from .controller import SwitchReportParser
 from .controller import SwitchResponses
 from .controller import Controller
-from .backends.internal.bluez import *
 from .backends import Backend
-
-if platform.system() == "Linux":
-    from .backends import BlueZBackend
 
 from .nxbt import Nxbt
 from .nxbt import Buttons

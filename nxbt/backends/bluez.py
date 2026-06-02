@@ -93,14 +93,12 @@ class BlueZBackend(Backend):
             type=socket.SOCK_SEQPACKET,
             proto=socket.BTPROTO_L2CAP,
         )
-
         try:
             s_ctrl.bind((self._bt.address, 17))
             s_itr.bind((self._bt.address, 19))
         except OSError:
             s_ctrl.bind((socket.BDADDR_ANY, 17))
             s_itr.bind((socket.BDADDR_ANY, 19))
-
         s_itr.listen(1)
         s_ctrl.listen(1)
 

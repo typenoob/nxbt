@@ -1,10 +1,10 @@
-import platform
+from .internal.tools import has_tool
 
 from .base import Backend
 
 from .bumble import BumbleBackend
 
-if platform.system() == "Linux":
+if has_tool("bluetoothd"):
     from .bluez import BlueZBackend
 
     __all__ = ["Backend", "BlueZBackend", "BumbleBackend", "BACKENDS"]
