@@ -43,7 +43,73 @@ NXBT supports multiple Bluetooth backend implementations. The default backend is
 
 **Note:** Most modern laptops use built-in USB-based Bluetooth adapters, so the Bumble (USB) backend will work out of the box. You can verify this with `lsusb`.
 
-## Welcoming Contributions
+## Permissions
+
+nxbt requires privileged access to interact with Bluetooth hardware. Running the entire process as root is the simplest approach, but it is **strongly discouraged** for security reasons. Below are safer alternatives that grant only the minimum required capabilities.
+
+### Required capabilities
+
+| Backend | Capabilities | Why |
+|---|---|---|
+| **Bumble (HCI socket)** | `cap_net_admin` | Binding to raw HCI sockets (`HCI_CHANNEL_USER`) |
+| **Bumble (USB)** | None (if libusb works) | Direct USB communication, no kernel socket needed |
+| **BlueZ** | `cap_net_admin`, `cap_net_bind_service` | Managing HCI adapter state via `btmgmt`, Binding to L2CAP PSM |
+
+### Option 1: File capabilities (recommended, persistent)
+
+Grant capabilities directly to the NXBT binary. This works across sessions and does not depend on ambient capability inheritance:
+
+```bash
+sudo setcap 'cap_net_admin,cap_net_bind_service+eip' $(readlink -f nxbt)
+```
+
+Then run normally:
+
+```bash
+nxbt demo
+```
+
+### Option 2: capsh (temporary, per-session)
+
+Use `capsh` to launch nxbt with the required ambient capabilities:
+
+```bash
+# Bumble (HCI socket) backend
+sudo capsh --caps="cap_net_admin,cap_net_bind_service+eip cap_setpcap,cap_setuid,cap_setgid+ep" \
+  --keep=1 --user=$USER \
+  --addamb=cap_net_admin,cap_net_bind_service -- \
+  -c "nxbt demo"
+
+# BlueZ backend
+sudo capsh --caps="cap_net_admin+eip cap_setpcap,cap_setuid,cap_setgid+ep" \
+  --keep=1 --user=$USER \
+  --addamb=cap_net_admin -- \
+  -c "nxbt -b bluez demo"
+```
+
+### BlueZ backend: systemd override
+
+When using the BlueZ backend, nxbt needs to restart `bluetoothd` with all plugins disabled (`--noplugin=*`). This requires writing a systemd drop-in override at `/run/systemd/system/bluetooth.service.d/nxbt.conf`.
+
+You can set this up once as root before running nxbt:
+
+```bash
+# Create the override
+sudo bash -c '
+mkdir -p /run/systemd/system/bluetooth.service.d
+cat > /run/systemd/system/bluetooth.service.d/nxbt.conf << "EOF"
+[Service]
+ExecStart=
+ExecStart=bluetoothd --noplugin=*
+EOF
+systemctl daemon-reload
+systemctl restart bluetooth
+'
+```
+
+Once the override file exists, nxbt will skip writing it on subsequent runs.
+
+## Contributions Welcome
 
 Everyone is welcome to share ideas or contribute through issues and pull requests.
 
@@ -51,6 +117,6 @@ Everyone is welcome to share ideas or contribute through issues and pull request
 
 Many thanks to the original author [Brikwerk](https://github.com/Brikwerk).
 
-## Getting Started
+## More
 
 The original readme can be found [here](https://github.com/typenoob/nxbt/blob/master/README.old.md)
