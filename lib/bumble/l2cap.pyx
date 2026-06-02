@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Changes: Replaced match-case statements with if/elif/elif because
+# Cython does not support match-case as of this writing.
+
 # -----------------------------------------------------------------------------
 # Imports
 # -----------------------------------------------------------------------------
