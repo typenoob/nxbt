@@ -32,10 +32,10 @@ dependencies = [
     "jinja2==3.1.2",
     "itsdangerous==2.2",
     "Werkzeug==3.1.0",
-    "dbus-fast==2.45.1",
     "bumble==0.0.229",
     "loguru>=0.7.0",
-    "btmgmt>=1.1.0",
+    "dbus-fast==2.45.1 ; sys_platform == 'linux'",
+    "btmgmt>=1.1.0 ; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
