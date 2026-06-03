@@ -9,10 +9,10 @@ import random
 import subprocess
 import threading
 import time
-import btmgmt
 from pathlib import Path
 
 from .tools import require_tool, run_command
+from .mgmt import MgmtClient
 
 from dbus_fast import BusType, Message, Variant
 from dbus_fast.aio.message_bus import MessageBus
@@ -386,6 +386,7 @@ class BlueZ:
         self.logger.debug(f"Using adapter under object path: {self.device_path}")
 
         self.device_id = self.device_path.split("/")[-1]
+        self.device_id_num = int(self.device_id.replace("hci", ""))
 
     def _prop(self, prop):
         """Get a property on the adapter."""
@@ -440,22 +441,24 @@ class BlueZ:
         :raises PermissionError: On run as non-root user
         :raises Exception: On CLI errors
         """
-        btmgmt.command(f"--index={self.device_id}", "public-addr", mac)
-        # Power-cycle adapter so the new address takes effect
-        btmgmt.command(f"--index={self.device_id}", "power", "off")
-        btmgmt.command(f"--index={self.device_id}", "power", "on")
+        with MgmtClient() as mgmt:
+            mgmt.set_public_address(self.device_id_num, mac)
+            mgmt.set_powered(self.device_id_num, False)
+            mgmt.set_powered(self.device_id_num, True)
 
     def set_class(self, device_class):
         """Set the device major/minor class via btmgmt."""
         cls = int(device_class, 16)
-        major = (cls >> 8) & 0x1F
         minor = cls & 0xFF
-        btmgmt.command(f"--index={self.device_id}", "class", str(major), str(minor))
+        major = (cls >> 8) & 0x1F
+        with MgmtClient() as mgmt:
+            mgmt.set_device_class(self.device_id_num, major, minor)
 
     def reset_adapter(self):
         """Power-cycle the HCI adapter via btmgmt."""
-        btmgmt.command(f"--index={self.device_id}", "power", "off")
-        btmgmt.command(f"--index={self.device_id}", "power", "on")
+        with MgmtClient() as mgmt:
+            mgmt.set_powered(self.device_id_num, False)
+            mgmt.set_powered(self.device_id_num, True)
 
     @property
     def name(self):
@@ -629,12 +632,9 @@ class BlueZ:
         :rtype: string
         """
 
-        _, output = btmgmt.command_str(f"--index={self.device_id}", "info")
-        # btmgmt info output contains a "Class:" line like:
-        #   Class: 0x002508
-        for line in output.split("\n"):
-            if "Class:" in line:
-                return line.split("Class:")[1].strip()[:8]
+        with MgmtClient() as mgmt:
+            cod = mgmt.read_controller_info(self.device_id_num).cod
+            return f"0x{cod[2]:02X}{cod[1]:02X}{cod[0]:02X}"
         return "00000000"
 
     def set_device_class(self, device_class):
