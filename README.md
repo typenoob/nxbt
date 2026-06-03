@@ -60,7 +60,7 @@ nxbt requires privileged access to interact with Bluetooth hardware. Running the
 Grant capabilities directly to the NXBT binary. This works across sessions and does not depend on ambient capability inheritance:
 
 ```bash
-sudo setcap 'cap_net_admin,cap_net_bind_service+eip' $(readlink -f nxbt)
+sudo setcap 'cap_net_admin,cap_net_bind_service+eip' $(readlink -f $(which nxbt))
 ```
 
 Then run normally:
