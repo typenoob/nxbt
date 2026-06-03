@@ -6,9 +6,9 @@ install-deps:
 	@SUDO=; if [ "$$(id -u)" -ne 0 ]; then SUDO=sudo; fi; \
 	if [ -f /etc/alpine-release ]; then \
 		$$SUDO apk update && \
-		$$SUDO apk add ccache make gcc g++ python3 python3-dev py3-pip libreadline-dev libusb-1.0-0 dbus-dev openssl-dev patchelf procps bluez; \
+		$$SUDO apk add ccache make gcc g++ python3 python3-dev py3-pip libusb dbus-dev openssl-dev patchelf procps zstandard bluez; \
 	elif [ -f /etc/debian_version ]; then \
-		$$SUDO apt update && $$SUDO apt install -y wget ccache make gcc g++ python3 python3-dev python3-pip libbluetooth-dev libusb-1.0-0 libssl-dev libreadline-dev libdbus-1-dev patchelf procps bluez; \
+		$$SUDO apt update && $$SUDO apt install -y wget ccache make gcc g++ python3 python3-dev python3-pip libusb-1.0-0 libssl-dev libdbus-1-dev patchelf procps zstandard bluez; \
 	else \
 		echo "Unsupported OS. Only Debian, Ubuntu and Alpine are supported. Skipping dependency installation."; \
 	fi
