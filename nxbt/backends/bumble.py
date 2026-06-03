@@ -14,7 +14,6 @@ from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport
 
 from .internal.mgmt import MgmtClient
-from .internal.tools import get_blocked_hci_indices
 
 from ..controller.controller import ControllerTypes
 from ..controller.sdp import SWITCH_CONTROLLER_SDP
@@ -185,6 +184,8 @@ class BumbleBackend(Backend):
         adapters = []
 
         if hasattr(socket, "BTPROTO_HCI"):
+            from .internal.rfkill import get_blocked_hci_indices
+
             blocked = get_blocked_hci_indices()
             for dev_id in range(32):
                 if dev_id in blocked:

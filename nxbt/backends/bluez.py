@@ -13,6 +13,7 @@ from .internal.bluez import (
     SERVICE_NAME,
     ADAPTER_INTERFACE,
 )
+from .internal.rfkill import get_blocked_hci_indices
 from ..controller.controller import ControllerTypes
 from ..controller.sdp import SWITCH_CONTROLLER_SDP
 from .base import Backend
@@ -50,7 +51,9 @@ class BlueZBackend(Backend):
 
     @staticmethod
     def get_available_adapters() -> list:
-        return find_objects(SERVICE_NAME, ADAPTER_INTERFACE)
+        paths = find_objects(SERVICE_NAME, ADAPTER_INTERFACE)
+        blocked = get_blocked_hci_indices()
+        return [p for p in paths if not any(p.endswith(f"hci{i}") for i in blocked)]
 
     @staticmethod
     def get_switch_addresses() -> list:

@@ -19,12 +19,12 @@ I started this as a fork of the original project. Once it reaches sufficient mat
 ## Quick Start
 
 ```
-docker run --rm --privileged --network host \
+docker run --rm --network host \
   -v /var/run/dbus:/var/run/dbus \
-  -v /var/lib/bluetooth:/var/lib/bluetooth \
-  -v /sys:/sys \
-  -v /dev:/dev \
-  nxbt:gnu -b bluez demo
+  --device=/dev/bus/usb --device=/dev/rfkill \
+  --security-opt apparmor=unconfined \
+  --cap-add=NET_ADMIN --cap-add=NET_BIND_SERVICE \
+  nxbt:gnu webapp
 ```
 
 ## Bluetooth Backends
