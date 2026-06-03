@@ -53,7 +53,7 @@ nxbt requires privileged access to interact with Bluetooth hardware. Running the
 |---|---|---|
 | **Bumble (HCI socket)** | `cap_net_admin` | Binding to raw HCI sockets (`HCI_CHANNEL_USER`) |
 | **Bumble (USB)** | None (if libusb works) | Direct USB communication, no kernel socket needed |
-| **BlueZ** | `cap_net_admin`, `cap_net_bind_service` | Managing HCI adapter state via `btmgmt`, Binding to L2CAP PSM |
+| **BlueZ** | `cap_net_admin`, `cap_net_bind_service` | Binding to raw HCI sockets (`HCI_CHANNEL_CONTROL`), Binding to L2CAP PSM |
 
 ### Option 1: File capabilities (recommended, persistent)
 
