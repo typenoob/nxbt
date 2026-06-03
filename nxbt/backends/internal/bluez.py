@@ -432,7 +432,7 @@ class BlueZ:
         return self._prop("Address").upper()
 
     def set_address(self, mac):
-        """Sets the Bluetooth MAC address of the Bluetooth adapter via btmgmt.
+        """Sets the Bluetooth MAC address of the Bluetooth adapter.
         For changes to apply, the adapter is power-cycled.
 
         :param mac: A Bluetooth MAC address in
@@ -447,7 +447,7 @@ class BlueZ:
             mgmt.set_powered(self.device_id_num, True)
 
     def set_class(self, device_class):
-        """Set the device major/minor class via btmgmt."""
+        """Set the device major/minor class."""
         cls = int(device_class, 16)
         minor = cls & 0xFF
         major = (cls >> 8) & 0x1F
@@ -455,7 +455,7 @@ class BlueZ:
             mgmt.set_device_class(self.device_id_num, major, minor)
 
     def reset_adapter(self):
-        """Power-cycle the HCI adapter via btmgmt."""
+        """Power-cycle the HCI adapter."""
         with MgmtClient() as mgmt:
             mgmt.set_powered(self.device_id_num, False)
             mgmt.set_powered(self.device_id_num, True)
@@ -658,7 +658,8 @@ class BlueZ:
 
         major = (int(device_class, 16) >> 8) & 0x1F
         minor = int(device_class, 16) & 0xFF
-        btmgmt.command(f"--index={self.device_id}", "class", str(major), str(minor))
+        with MgmtClient() as mgmt:
+            mgmt.set_device_class(self.device_id_num, major, minor)
 
     @property
     def powered(self):

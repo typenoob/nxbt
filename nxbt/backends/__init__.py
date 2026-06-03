@@ -1,10 +1,10 @@
-from .internal.tools import has_tool
+import socket
 
 from .base import Backend
 
 from .bumble import BumbleBackend
 
-if has_tool("bluetoothd"):
+if hasattr(socket, "AF_BLUETOOTH"):
     from .bluez import BlueZBackend
 
     __all__ = ["Backend", "BlueZBackend", "BumbleBackend", "BACKENDS"]
