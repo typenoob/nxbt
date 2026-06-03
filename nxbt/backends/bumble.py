@@ -13,7 +13,7 @@ from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport
 
-from .internal.bluez import get_hci_state, toggle_hci_adapter
+from .internal.mgmt import MgmtClient
 from .internal.tools import get_blocked_hci_indices
 
 from ..controller.controller import ControllerTypes
@@ -199,7 +199,7 @@ class BumbleBackend(Backend):
                     adapters.append(f"hci-socket:{dev_id}")
                     s.close()
                 except OSError:
-                    break
+                    continue
 
         # Scan for USB Bluetooth adapters as fallback
         try:
@@ -381,7 +381,8 @@ class BumbleBackend(Backend):
         """Clean up the transport, bridges, and event loop."""
         self._stop_event_loop()
         if self._hci_old_state is not None:
-            toggle_hci_adapter(self._transport_idx, not self._hci_old_state)
+            with MgmtClient() as mgmt:
+                mgmt.set_powered(self._transport_idx, self._hci_old_state)
         if self._transport_spec.startswith("usb"):
             self._reattach_usb_drivers()
 
@@ -465,9 +466,15 @@ class BumbleBackend(Backend):
         """Async setup of the Bumble device."""
         self._patch_intel_driver_variant()
         if self._transport_spec.startswith("hci"):
-            self._hci_old_state = get_hci_state(self._transport_idx)
-            if self._hci_old_state:
-                toggle_hci_adapter(self._transport_idx)
+            with MgmtClient() as mgmt:
+                self._hci_old_state = (
+                    "POWERED"
+                    in mgmt.read_controller_info(
+                        self._transport_idx
+                    ).get_current_settings()
+                )
+                if self._hci_old_state:
+                    mgmt.set_powered(self._transport_idx, False)
 
         # Open transport
         self._transport = self._run_async(open_transport(self._transport_spec))
