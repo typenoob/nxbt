@@ -226,32 +226,6 @@ def toggle_clean_bluez(toggle):
     logger.debug("systemd found and bluetooth reloaded")
 
 
-def get_hci_state(hci_id):
-    """Get the up/down state of an HCI adapter via btmgmt.
-
-    :param hci_id: The HCI adapter index (e.g., 0 for hci0)
-    :return: True if adapter is UP, False if DOWN
-    """
-    _, output = btmgmt.command_str(f"--index={hci_id}", "info")
-    return "powered" in output
-
-
-def toggle_hci_adapter(hci_id, down=True):
-    """Brings an HCI adapter down or up using btmgmt.
-    Useful for releasing/reacquiring exclusive HCI_CHANNEL_USER
-    without restarting bluetoothd.
-
-    :param hci_id: The HCI adapter index (e.g., 0 for hci0)
-    :param down: True to bring down, False to bring up
-    """
-    if down:
-        btmgmt.command(f"--index={hci_id}", "power", "off")
-    else:
-        btmgmt.command(f"--index={hci_id}", "power", "on")
-    logger = logging.getLogger("nxbt")
-    logger.debug(f"hci{hci_id} brought {'down' if down else 'up'}")
-
-
 def clean_sdp_records():
     """Cleans all SDP Records from BlueZ with sdptool
 
