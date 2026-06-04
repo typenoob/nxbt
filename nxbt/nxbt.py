@@ -236,12 +236,6 @@ class Nxbt:
         except Exception:
             pass
 
-    def _on_signal(self, _signum, _frame):  # noqa: ARG002
-        """Signal handler for SIGINT (Ctrl+C). Triggers atexit cleanup
-        via sys.exit.
-        """
-        sys.exit(0)
-
     @staticmethod
     def _command_manager(
         task_queue,
@@ -269,8 +263,6 @@ class Nxbt:
         """
 
         cm = _ControllerManager(state, bluetooth_lock, backend)
-        # Ignore SIGINT in the child — only the parent handles Ctrl+C.
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
         # Ensure a SystemExit exception is raised on SIGTERM
         # so that we can gracefully shutdown.
         signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
