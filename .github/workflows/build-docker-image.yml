@@ -1,26 +1,22 @@
 name: Docker Image CI
 
 on:
-  push:
-    branches: ["main"]
-    paths-ignore:
-      - "README.md"
-      - ".github/**"
-      - "CHANGELOG.md"
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
-env:
-  VERSION: 0.2
+    inputs:
+      tag:
+        description: Release Tag
+        required: true
+        default: dry-run
+        type: string
+
 jobs:
   matrix:
     runs-on: ubuntu-latest
+    env:
+      name: ghcr.io/${{ github.repository_owner }}
     strategy:
       matrix:
         include:
-          - libc: musl
-            platform: linux/386
-            id: musl-i386
           - libc: musl
             platform: linux/amd64
             id: musl-amd64
@@ -33,9 +29,9 @@ jobs:
           - libc: musl
             platform: linux/arm64/v8
             id: musl-aarch64
-          - libc: gnu
+          - libc: musl
             platform: linux/386
-            id: gnu-i386
+            id: musl-i386
           - libc: gnu
             platform: linux/amd64
             id: gnu-amd64
@@ -45,6 +41,10 @@ jobs:
           - libc: gnu
             platform: linux/arm64/v8
             id: gnu-aarch64
+          - libc: gnu
+            platform: linux/386
+            id: gnu-i386
+
     steps:
       - run: |
           matrix=$((
@@ -87,11 +87,11 @@ jobs:
           context: .
           platforms: ${{ matrix.platform }}
           push: true
-          tags: typenoob/nxbt:${{ env.VERSION }}-${{ matrix.id }}
+          tags: ${{ env.name }}/nxbt:${{ inputs.tag }}-${{ matrix.id }}
           file: docker/${{ matrix.libc }}/Dockerfile
   
       - name: Create the container
-        run: docker create --platform ${{ matrix.platform }} --name extract typenoob/nxbt:${{ env.VERSION }}-${{ matrix.id }}
+        run: docker create --platform ${{ matrix.platform }} --name extract $name/nxbt:${{ inputs.tag }}-${{ matrix.id }}
       
       - name: Copy the elf file
         run: |
@@ -104,15 +104,11 @@ jobs:
           path: |
             /nxbt-${{ matrix.id }}
 
-      - name: Generate release tag
-        id: tag
-        run: |
-          echo "::set-output name=release_tag::Build_$(date +"%Y.%m.%d")"
-
       - name: Release
+        if: ${{ inputs.tag != 'dry-run' }}
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.tag.outputs.release_tag }}
+          tag_name: ${{ inputs.tag }}
           files: |
             /nxbt-${{ matrix.id }}
         env:
@@ -127,7 +123,7 @@ jobs:
       - uses: actions/download-artifact@v4
       - run: |
           matrix="$(cat */matrix | jq -c --slurp .)"
-          echo "::set-output name=matrix::$matrix"
+          echo "name=matrix::$matrix" >> $GITHUB_OUTPUT
         id: matrix
 
   manifest:
@@ -135,9 +131,15 @@ jobs:
     runs-on: ubuntu-latest
     env:
       matrix: ${{ needs.check-matrix.outputs.matrix }}
-      name: ${{ secrets.DOCKERHUB_USERNAME }}
+      name: ghcr.io/${{ github.repository_owner }}
     steps:
+      - name: Login to Github Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Manifest
         run: |
-          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-gnu $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
-          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ env.VERSION }}-musl $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ env.VERSION }}-\(.id)"|.id]|join(" ")')
+          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ inputs.tag }}-gnu $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
+          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ inputs.tag }}-musl $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')

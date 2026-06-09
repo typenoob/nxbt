@@ -24,7 +24,7 @@ docker run --rm --network host \
   --device=/dev/bus/usb --device=/dev/rfkill \
   --security-opt apparmor=unconfined \
   --cap-add=NET_ADMIN --cap-add=NET_BIND_SERVICE \
-  -it nxbt:gnu webapp
+  -it ghcr.io/typenoob/nxbt:gnu webapp
 ```
 
 ## Bluetooth Backends
