@@ -35,7 +35,7 @@ dependencies = [
     "bumble==0.0.229",
     "loguru>=0.7.0",
     "dbus-fast==2.45.1; sys_platform == 'linux'",
-    "zstandard>=0.25.0; platform_machine != 'i386'",
+    "zstandard>=0.25.0; platform_machine != 'i686'", # Can be removed after https://github.com/Nuitka/Nuitka/issues/3927 is resolved
 ]
 
 [project.optional-dependencies]
@@ -68,7 +68,7 @@ default = true
 
 [dependency-groups]
 dev = [
-    "nuitka>=4.1.0",
+    "nuitka>=4.1.1",
     "ruff==0.14.4",
     "pytest<=9.0.1",
     "pylint==4.0.5",
