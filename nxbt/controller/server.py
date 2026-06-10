@@ -4,6 +4,7 @@ import time
 import queue
 import logging
 import traceback
+import sys
 import statistics as stat
 
 from ..backends import BACKENDS
@@ -88,7 +89,11 @@ class ControllerServer:
         self.logger_level = self.logger.level
 
         self.state["state"] = "initializing"
-        signal.signal(signal.SIGTERM, self._on_exit)
+
+        # Ensure a SystemExit exception is raised on SIGTERM
+        # so that we can gracefully shutdown.
+        signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         paired = False
         try:
@@ -140,6 +145,8 @@ class ControllerServer:
             except Exception as e:
                 self.logger.debug("Error during graceful shutdown:")
                 self.logger.debug(traceback.format_exc())
+        finally:
+            self.shutdown()
 
     def mainloop(self, itr, ctrl):
         duration_start = time.perf_counter()
@@ -355,11 +362,8 @@ class ControllerServer:
         itr.sendall(self.protocol.get_report())
         return itr, ctrl
 
-    def _on_exit(self, signum, frame):
+    def shutdown(self):
         try:
             self.backend.shutdown()
         except Exception:
             pass
-        import sys
-
-        sys.exit(0)

@@ -1,4 +1,4 @@
-from multiprocessing import Process, Lock, Queue, Manager
+from multiprocessing import Process, Queue, Manager
 import queue
 import traceback
 from enum import Enum
@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import json
+import sys
 
 
 from .controller import ControllerServer
@@ -170,26 +171,30 @@ class Nxbt:
         # Main queue for nbxt tasks
         self.task_queue = Queue()
 
-        # Sychronizes bluetooth actions
-        self._bluetooth_lock = Lock()
-
         # Creates/manages shared resources
         self.resource_manager = Manager()
+
+        # Sychronizes bluetooth actions
+        self._bluetooth_lock = self.resource_manager.Lock()
+
         # Shared dictionary for viewing overall nxbt state.
         # Should treated as read-only except by
         # the main nxbt multiprocessing process.
         self.manager_state = self.resource_manager.dict()
-        self.manager_state_lock = Lock()
 
         # Shared, controller management properties.
         # The controller lock is used to sychronize use.
-        self._controller_lock = Lock()
+        self._controller_lock = self.resource_manager.Lock()
         self._controller_counter = 0
         self._adapters_in_use = {}
         self._controller_adapter_lookup = {}
 
         # Exit handler
         atexit.register(self._on_exit)
+
+        # Ensure a SystemExit exception is raised on SIGTERM
+        # so that we can gracefully shutdown.
+        signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
 
         # Starting the nxbt worker process
         self.controllers = Process(
@@ -219,19 +224,15 @@ class Nxbt:
             if hasattr(self, "controllers") and self.controllers.is_alive():
                 # Enqueue a QUIT message first so the worker can run its
                 # finally block (which calls cm.shutdown() to kill all
-                # controller children). On Windows, terminate() is a
-                # hard kill that bypasses finally/cleanup.
+                # controller children).
                 try:
                     self.task_queue.put(
                         {"command": NxbtCommands.QUIT, "arguments": {}}, block=False
                     )
                 except Exception:
                     pass
-                self.controllers.join(timeout=8)
-                if self.controllers.is_alive():
-                    self.controllers.terminate()
-                    self.controllers.join(timeout=3)
-
+                self.controllers.terminate()
+                self.controllers.join(5)
             self.resource_manager.shutdown()
         except Exception:
             pass
@@ -266,6 +267,7 @@ class Nxbt:
         # Ensure a SystemExit exception is raised on SIGTERM
         # so that we can gracefully shutdown.
         signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
 
         try:
             while True:
@@ -313,7 +315,6 @@ class Nxbt:
 
         finally:
             cm.shutdown()
-            sys.exit(0)
 
     def macro(self, controller_index, macro, block=True):
         """Used to input a given macro on a specified controller.
@@ -876,11 +877,13 @@ class _ControllerManager:
 
     def remove_controller(self, index):
         self._children[index].terminate()
+        self._children[index].join(5)
         self.state.pop(index, None)
 
     def shutdown(self):
         # Loop over children and kill all
-        for index, child in self._children.items():
+        for _, child in self._children.items():
             child.terminate()
+            child.join(5)
 
         self.controller_resources.shutdown()
