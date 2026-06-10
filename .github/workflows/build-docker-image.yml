@@ -21,9 +21,6 @@ jobs:
             platform: linux/amd64
             id: musl-amd64
           - libc: musl
-            platform: linux/arm/v6
-            id: musl-armv6
-          - libc: musl
             platform: linux/arm/v7
             id: musl-armv7
           - libc: musl
@@ -123,7 +120,7 @@ jobs:
       - uses: actions/download-artifact@v4
       - run: |
           matrix="$(cat */matrix | jq -c --slurp .)"
-          echo "name=matrix::$matrix" >> $GITHUB_OUTPUT
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
         id: matrix
 
   manifest:
@@ -141,5 +138,19 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Manifest
         run: |
-          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ inputs.tag }}-gnu $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
-          [[ -z $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")') ]] || docker buildx imagetools create -t $name/nxbt:${{ inputs.tag }}-musl $(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
+          gnu_images=$(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="gnu")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
+          if [ -n "$gnu_images" ]; then
+            docker buildx imagetools create \
+              -t $name/nxbt:${{ inputs.tag }}-gnu \
+              -t $name/nxbt:gnu \
+              -t $name/nxbt:${{ inputs.tag }} \
+              -t $name/nxbt:latest \
+              $gnu_images
+          fi
+          musl_images=$(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="musl")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
+          if [ -n "$musl_images" ]; then
+            docker buildx imagetools create \
+              -t $name/nxbt:${{ inputs.tag }}-musl \
+              -t $name/nxbt:musl \
+              $musl_images
+          fi

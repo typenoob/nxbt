@@ -951,11 +951,6 @@ version = "4.1.2"
 source = { registry = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 sdist = { url = "https://pypi.tuna.tsinghua.edu.cn/packages/e6/2e/9ea398ca1a4fc458958fdf477ae18d3395bee8c9f8950ca6f0f039ea2585/nuitka-4.1.2.tar.gz", hash = "sha256:efc2359b171d7b63046ca8ec8dee57015c3466a9df74b68a049c2c1a7e93ecee", size = 4561050, upload-time = "2026-05-28T08:26:07.947Z" }
 
-[package.optional-dependencies]
-onefile = [
-    { name = "zstandard" },
-]
-
 [[package]]
 name = "nxbt"
 version = "0.1.0"
@@ -974,6 +969,7 @@ dependencies = [
     { name = "psutil" },
     { name = "pynput" },
     { name = "werkzeug" },
+    { name = "zstandard", marker = "platform_machine != 'i686'" },
 ]
 
 [package.optional-dependencies]
@@ -983,7 +979,7 @@ dev = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "nuitka", extra = ["onefile"] },
+    { name = "nuitka" },
     { name = "pylint" },
     { name = "pytest" },
     { name = "ruff" },
@@ -1005,12 +1001,13 @@ requires-dist = [
     { name = "pynput", specifier = "==1.6.8" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "werkzeug", specifier = "==3.1.0" },
+    { name = "zstandard", marker = "platform_machine != 'i686'", specifier = ">=0.25.0" },
 ]
 provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "nuitka", extras = ["onefile"], specifier = ">=4.1.0" },
+    { name = "nuitka", specifier = ">=4.1.1" },
     { name = "pylint", specifier = "==4.0.5" },
     { name = "pytest", specifier = "<=9.0.1" },
     { name = "ruff", specifier = "==0.14.4" },
