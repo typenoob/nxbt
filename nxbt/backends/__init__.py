@@ -4,7 +4,7 @@ from .base import Backend
 
 from .bumble import BumbleBackend
 
-if hasattr(socket, "AF_BLUETOOTH"):
+if hasattr(socket, "BTPROTO_L2CAP"):
     from .bluez import BlueZBackend
 
     __all__ = ["Backend", "BlueZBackend", "BumbleBackend", "BACKENDS"]
