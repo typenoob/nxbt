@@ -54,7 +54,7 @@ jobs:
             echo '${{ toJSON(matrix) }}'
           ) | jq -c .)
           echo "$matrix" > matrix
-          echo "::set-output name=matrix::$matrix"
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
         id: matrix
       - uses: actions/upload-artifact@v4
         with:
@@ -112,12 +112,22 @@ jobs:
           else
             sudo docker cp extract:/nxbt/release/nxbt /nxbt-${{ matrix.id }}
           fi
+
+      - name: Set artifact file path
+        id: set-path
+        run: |
+          if [ "${{ matrix.libc }}" = "msys2" ]; then
+            echo "FILE=/nxbt-${{ matrix.id }}.exe" >> $GITHUB_OUTPUT
+          else
+            echo "FILE=/nxbt-${{ matrix.id }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Archive production artifacts
         uses: actions/upload-artifact@v4
         with:
           name: artifacts-${{ matrix.id }}
           path: |
-            /nxbt-${{ matrix.id }}
+            ${{ steps.set-path.outputs.FILE }}
 
       - name: Release
         if: ${{ inputs.tag != 'dry-run' }}
@@ -125,7 +135,7 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           files: |
-            /nxbt-${{ matrix.id }}
+            ${{ steps.set-path.outputs.FILE }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -172,10 +182,17 @@ jobs:
               -t $name/nxbt:musl \
               $musl_images
           fi
-          msys2_images=$(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="msys2")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
-          if [ -n "$msys2_images" ]; then
+          mingw64_images=$(echo $matrix | jq -r --arg var $name '[.[]|select(.id=="mingw64")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
+          if [ -n "$mingw64_images" ]; then
             docker buildx imagetools create \
-              -t $name/nxbt:${{ inputs.tag }}-msys2 \
-              -t $name/nxbt:msys2 \
-              $msys2_images
+              -t $name/nxbt:${{ inputs.tag }}-mingw64 \
+              -t $name/nxbt:mingw64 \
+              $mingw64_images
+          fi
+          ucrt64_images=$(echo $matrix | jq -r --arg var $name '[.[]|select(.id=="ucrt64")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
+          if [ -n "$ucrt64_images" ]; then
+            docker buildx imagetools create \
+              -t $name/nxbt:${{ inputs.tag }}-ucrt64 \
+              -t $name/nxbt:ucrt64 \
+              $ucrt64_images
           fi
