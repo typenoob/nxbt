@@ -9,11 +9,12 @@ import sys
 import time
 import json
 import sys
+import sys
 
 
 from .controller import ControllerServer
 from .controller import ControllerTypes
-from .logging import create_logger
+from .logger import create_logger
 
 
 JOYCON_L = ControllerTypes.JOYCON_L
@@ -188,6 +189,7 @@ class Nxbt:
         self._controller_counter = 0
         self._adapters_in_use = {}
         self._controller_adapter_lookup = {}
+        self._stop_event = self.resource_manager.Event()
 
         # Exit handler
         atexit.register(self._on_exit)
@@ -202,6 +204,7 @@ class Nxbt:
             args=(
                 self.task_queue,
                 self.manager_state,
+                self._stop_event,
                 self._bluetooth_lock,
                 self._backend,
                 self.debug,
@@ -231,9 +234,10 @@ class Nxbt:
                     )
                 except Exception:
                     pass
-                self.controllers.terminate()
+                self._stop_event.set()
                 self.controllers.join(5)
             self.resource_manager.shutdown()
+
         except Exception:
             pass
 
@@ -241,6 +245,7 @@ class Nxbt:
     def _command_manager(
         task_queue,
         state,
+        stop_event,
         bluetooth_lock,
         backend,
         debug=False,
@@ -262,20 +267,15 @@ class Nxbt:
         :param debug: Enable debug logging
         :param log_to_file: Enable logging to file
         """
-
-        cm = _ControllerManager(state, bluetooth_lock, backend)
-        # Ensure a SystemExit exception is raised on SIGTERM
-        # so that we can gracefully shutdown.
-        signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-
         try:
-            while True:
+            cm = _ControllerManager(state, bluetooth_lock, backend)
+
+            while not stop_event.is_set():
                 try:
-                    msg = task_queue.get(timeout=5)
+                    msg = task_queue.get(timeout=1)
                 except queue.Empty:
                     msg = None
-
                 if msg:
                     if msg["command"] == NxbtCommands.CREATE_CONTROLLER:
                         try:
@@ -288,6 +288,7 @@ class Nxbt:
                                 msg["arguments"]["reconnect_address"],
                                 debug=debug,
                                 log_to_file=log_to_file,
+                                stop_event=stop_event,
                             )
                         except Exception:
                             idx = msg["arguments"]["controller_index"]
@@ -312,7 +313,6 @@ class Nxbt:
                         cm.remove_controller(index)
                     elif msg["command"] == NxbtCommands.QUIT:
                         sys.exit(0)
-
         finally:
             cm.shutdown()
 
@@ -798,6 +798,7 @@ class _ControllerManager:
         reconnect_address=None,
         debug=False,
         log_to_file=False,
+        stop_event=None,
     ):
         """Instantiates a given controller as a multiprocessing
         Process with a shared state dict and a task queue.
@@ -844,6 +845,7 @@ class _ControllerManager:
             backend=self.backend(adapter_path),
             lock=self.lock,
             state=controller_state,
+            stop_event=stop_event,
             task_queue=controller_queue,
             colour_body=colour_body,
             colour_buttons=colour_buttons,
@@ -883,7 +885,6 @@ class _ControllerManager:
     def shutdown(self):
         # Loop over children and kill all
         for _, child in self._children.items():
-            child.terminate()
             child.join(5)
 
         self.controller_resources.shutdown()

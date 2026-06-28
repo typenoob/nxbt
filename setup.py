@@ -19,7 +19,7 @@ if platform.machine() in ("armv7", "armv7l"):
     # Resolve `Error: conditional branch out of range`
     extra_compile_args = ["-marm"]
     extra_link_args = ["-marm"]
-if sys.platform == "win32":
+if sys.platform == "win32" and shutil.which("gcc") is not None:
     setup_options["build_ext"] = {"compiler": "mingw32"}
 
 setup(
@@ -27,14 +27,14 @@ setup(
     ext_modules=cythonize(
         [
             Extension(
-                "lib.bumble.hci",
-                sources=["lib/bumble/hci.pyx"],
+                "vendor.bumble.hci",
+                sources=["vendor/bumble/hci.pyx"],
                 extra_compile_args=extra_compile_args,
                 extra_link_args=extra_link_args,
             ),
             Extension(
-                "lib.bumble.l2cap",
-                sources=["lib/bumble/l2cap.pyx"],
+                "vendor.bumble.l2cap",
+                sources=["vendor/bumble/l2cap.pyx"],
                 extra_compile_args=extra_compile_args,
                 extra_link_args=extra_link_args,
             ),

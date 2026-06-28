@@ -211,7 +211,7 @@ def toggle_clean_bluez(toggle):
     else:
         try:
             os.remove(override_path)
-        except FileNotFoundError:
+        except (FileNotFoundError, PermissionError):
             # Override doesn't exist, no need to restart bluetooth
             return
 

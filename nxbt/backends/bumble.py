@@ -12,6 +12,7 @@ from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport
+from usb1 import USBDevice
 
 from .internal.mgmt import MgmtClient
 
@@ -202,40 +203,33 @@ class BumbleBackend(Backend):
 
         # Scan for USB Bluetooth adapters as fallback
         try:
-            import usb.core
-
-            # Use libusb_package if available (required on Windows)
-            try:
-                import libusb_package
-
-                usb_find = libusb_package.find
-            except ImportError:
-                usb_find = usb.core.find
+            import usb1
 
             BT_HCI_CLASS = (0xE0, 0x01, 0x01)  # Wireless Controller / RF / Bluetooth
             bt_count = 0
-
-            for dev in usb_find(find_all=True):
-                is_hci = (
-                    dev.bDeviceClass,
-                    dev.bDeviceSubClass,
-                    dev.bDeviceProtocol,
-                ) == BT_HCI_CLASS
-                if not is_hci and dev.bDeviceClass == 0x00:
-                    for cfg in dev:
-                        for intf in cfg:
-                            if (
-                                intf.bInterfaceClass,
-                                intf.bInterfaceSubClass,
-                                intf.bInterfaceProtocol,
-                            ) == BT_HCI_CLASS:
-                                is_hci = True
+            with usb1.USBContext() as ctx:
+                for dev in ctx.getDeviceList():
+                    is_hci = (
+                        dev.getDeviceClass(),
+                        dev.getDeviceSubClass(),
+                        dev.getDeviceProtocol(),
+                    ) == BT_HCI_CLASS
+                    if not is_hci and dev.getDeviceClass() == 0x00:
+                        for cfg in dev:
+                            for intf in cfg:
+                                for setting in intf:
+                                    if (
+                                        setting.getClass(),
+                                        setting.getSubClass(),
+                                        setting.getProtocol(),
+                                    ) == BT_HCI_CLASS:
+                                        is_hci = True
+                                        break
+                            if is_hci:
                                 break
-                        if is_hci:
-                            break
-                if is_hci:
-                    adapters.append(f"usb:{bt_count}")
-                    bt_count += 1
+                    if is_hci:
+                        adapters.append(f"usb:{bt_count}")
+                        bt_count += 1
         except Exception:
             pass
         return adapters
@@ -258,7 +252,6 @@ class BumbleBackend(Backend):
     ):
         super().__init__(adapter_idx)
         self.logger = logging.getLogger("nxbt")
-
         # Default to first available HCI socket adapter
         if adapter_idx is None:
             adapters = self.get_available_adapters()
@@ -278,6 +271,7 @@ class BumbleBackend(Backend):
         self._pending_controller_type = None
         # Save old hci state to restore
         self._hci_old_state = None
+        self._future = None
 
     @property
     def address(self) -> str:
@@ -310,7 +304,6 @@ class BumbleBackend(Backend):
             except Exception:
                 pass
             self._transport = None
-
         if self._loop and self._loop.is_running():
             self._loop.call_soon_threadsafe(self._loop.stop)
         if self._loop_thread and self._loop_thread.is_alive():
@@ -323,73 +316,23 @@ class BumbleBackend(Backend):
         self._loop = None
         self._device = None
 
-    def _reattach_usb_drivers(self):
-        """Reattach kernel drivers on USB interfaces we claimed."""
-        if not self._transport_spec.startswith("usb:"):
-            return
-        try:
-            import usb.core
-
-            try:
-                import libusb_package
-
-                usb_find = libusb_package.find
-            except ImportError:
-                usb_find = usb.core.find
-
-            try:
-                usb_idx = int(self._transport_spec.split(":")[1])
-                devices = list(
-                    usb_find(
-                        find_all=True,
-                        bDeviceClass=0xE0,
-                        bDeviceSubClass=0x01,
-                        bDeviceProtocol=0x01,
-                    )
-                )
-                self.logger.debug(
-                    f"USB cleanup: usb_idx={usb_idx}, devices_found={len(devices)}"
-                )
-                if usb_idx < len(devices):
-                    usb_device = devices[usb_idx]
-                else:
-                    self.logger.debug("No matching USB device found for cleanup")
-                    return
-            except Exception as e:
-                self.logger.debug(f"USB device lookup failed: {e}")
-                return
-            for cfg in usb_device:
-                for intf in cfg:
-                    if usb_device.is_kernel_driver_active(intf.bInterfaceNumber):
-                        continue
-                    try:
-                        import time
-
-                        time.sleep(0.01)  # Avoid resource busy
-                        usb_device.attach_kernel_driver(intf.bInterfaceNumber)
-                        self.logger.debug(
-                            f"Reattached kernel driver to interface {intf.bInterfaceNumber}"
-                        )
-                    except Exception as e:
-                        pass
-            self.logger.debug("USB kernel drivers reattached")
-        except Exception as e:
-            self.logger.debug(f"Failed to reattach USB kernel drivers: {e}")
-
     def shutdown(self):
         """Clean up the transport, bridges, and event loop."""
+        if self._future:
+            self._future.cancel()
+        if self._device and 256 in self._device.connections:
+            conn = self._device.connections[256]
+            self._run_async(conn.disconnect())
         self._stop_event_loop()
         if self._hci_old_state is not None:
             with MgmtClient() as mgmt:
                 mgmt.set_powered(self._transport_idx, self._hci_old_state)
-        if self._transport_spec.startswith("usb"):
-            self._reattach_usb_drivers()
 
     def _run_async(self, coro):
         """Run an async coroutine on the background event loop."""
         assert self._loop is not None
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result(timeout=30)
+        self._future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return self._future.result(timeout=30)
 
     def _xml_to_data_element(self, elem: ET.Element) -> DataElement:
         """Convert an SDP XML element tree to a Bumble DataElement."""
@@ -474,7 +417,6 @@ class BumbleBackend(Backend):
                 )
                 if self._hci_old_state:
                     mgmt.set_powered(self._transport_idx, False)
-
         # Open transport
         self._transport = self._run_async(open_transport(self._transport_spec))
 
@@ -521,13 +463,7 @@ class BumbleBackend(Backend):
     def setup(self, controller_type) -> None:
         self._pending_controller_type = controller_type
         self._start_event_loop()
-        try:
-            self._setup_async(controller_type)
-        except Exception:
-            self._stop_event_loop()
-            # Reattach USB kernel drivers on setup failure so retries can succeed
-            self._reattach_usb_drivers()
-            raise
+        self._setup_async(controller_type)
 
     def _on_l2cap_connection(self, psm: int, channel: ClassicChannel):
         """Called when a peer connects to one of our L2CAP servers."""
@@ -556,6 +492,7 @@ class BumbleBackend(Backend):
         self._bridges.append(bridge)
 
         bumble_socket = _BumbleSocket(bridge.socket, peer_addr, local_addr)
+        bumble_socket.setblocking(False)
         # Also store the bridge on the socket for cleanup
         bumble_socket._bridge = bridge
 
@@ -590,19 +527,12 @@ class BumbleBackend(Backend):
             self.logger.debug(f"L2CAP server registration failed: {e}")
             raise
 
-        self.logger.debug("BumbleBackend: waiting for incoming HID connections...")
+        try:
+            ctrl = self._run_async(asyncio.wait_for(self._ctrl_future, 120))
+            itr = self._run_async(asyncio.wait_for(self._itr_future, 120))
+        except asyncio.CancelledError:
+            return None, None
 
-        self._run_async(asyncio.wait_for(self._ctrl_future, 120))
-        self._run_async(asyncio.wait_for(self._itr_future, 120))
-
-        ctrl = self._ctrl_future.result()
-        itr = self._itr_future.result()
-
-        self.logger.debug(
-            f"BumbleBackend: accepted connection from {itr.getpeername()[0]}"
-        )
-        self._ctrl_future = None
-        self._itr_future = None
         return itr, ctrl
 
     def reconnect(self, reconnect_address: str) -> tuple:
@@ -618,11 +548,11 @@ class BumbleBackend(Backend):
             ctrl_channel = await conn.create_l2cap_channel(
                 ClassicChannelSpec(psm=HID_CONTROL_PSM)
             )
+
             itr_channel = await conn.create_l2cap_channel(
                 ClassicChannelSpec(psm=HID_INTERRUPT_PSM)
             )
-
-            # Replace old dead bridges with fresh ones
+            # Replace old dead bridges with fresh onesf
             itr_bridge = _ChannelSocketBridge(itr_channel)
             ctrl_bridge = _ChannelSocketBridge(ctrl_channel)
 
@@ -638,9 +568,7 @@ class BumbleBackend(Backend):
             self.logger.debug(f"BumbleBackend: reconnecting to {address}...")
             local_addr = str(self._device.public_address or self._device.random_address)
             self._bridges.clear()
-
             itr_bridge, ctrl_bridge = self._run_async(create_bridges(address))
-
             self._bridges.append(itr_bridge)
             itr = _BumbleSocket(itr_bridge.socket, address, local_addr)
             itr._bridge = itr_bridge

@@ -1,14 +1,14 @@
+from concurrent.futures import ThreadPoolExecutor
 import os
 import signal
 import time
 import queue
 import logging
 import traceback
-import sys
 import statistics as stat
 
 from ..backends import BACKENDS
-from ..logging import create_logger
+from ..logger import create_logger
 
 from .controller import ControllerTypes
 from .protocol import ControllerProtocol
@@ -22,6 +22,7 @@ class ControllerServer:
         controller_type,
         backend,
         state=None,
+        stop_event=None,
         task_queue=None,
         lock=None,
         colour_body=None,
@@ -46,6 +47,7 @@ class ControllerServer:
                 "direct_input": None,
             }
 
+        self.stop_event = stop_event
         self.task_queue = task_queue
 
         self.controller_type = controller_type
@@ -83,20 +85,17 @@ class ControllerServer:
         previously connected to Nintendo Switch, defaults to None
         :type reconnect_address: string or list, optional
         """
-
-        create_logger(debug=self._debug, log_to_file=self._log_to_file)
-        self.logger = logging.getLogger("nxbt")
-        self.logger_level = self.logger.level
-
-        self.state["state"] = "initializing"
-
-        # Ensure a SystemExit exception is raised on SIGTERM
-        # so that we can gracefully shutdown.
-        signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(0))
         signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-        paired = False
         try:
+            create_logger(debug=self._debug, log_to_file=self._log_to_file)
+            self.logger = logging.getLogger("nxbt")
+            self.logger_level = self.logger.level
+
+            self.state["state"] = "initializing"
+
+            paired = False
+
             # If we have a lock, prevent other controllers
             # from initializing at the same time and saturating the DBus,
             # potentially causing a kernel panic.
@@ -116,6 +115,8 @@ class ControllerServer:
             finally:
                 if self.lock:
                     self.lock.release()
+            if not itr or not ctrl:
+                raise RuntimeError("Cannot get bluetooth sockets")
             self.switch_address = itr.getpeername()[0].replace("/P", "")
             self.state["last_connection"] = self.switch_address
             # Clean up stale bonds on other backends so they don't
@@ -136,21 +137,17 @@ class ControllerServer:
         except KeyboardInterrupt:
             pass
         except Exception:
-            try:
-                self.state["state"] = "crashed"
-                self.state["errors"] = traceback.format_exc()
-                self.logger.debug("Error during connecting:")
-                self.logger.debug(self.state["errors"])
-                return self.state
-            except Exception as e:
-                self.logger.debug("Error during graceful shutdown:")
-                self.logger.debug(traceback.format_exc())
+            self.state["state"] = "crashed"
+            self.state["errors"] = traceback.format_exc()
+            self.logger.debug("Error during connecting:")
+            self.logger.debug(self.state["errors"])
+            return self.state
         finally:
-            self.shutdown()
+            self.backend.shutdown()
 
     def mainloop(self, itr, ctrl):
         duration_start = time.perf_counter()
-        while True:
+        while not self.stop_event.is_set():
             # Start timing command processing
             timer_start = time.perf_counter()
 
@@ -236,7 +233,7 @@ class ControllerServer:
 
     def _run_pairing_handshake(self, itr):
         received_first_message = False
-        while True:
+        while not self.stop_event.is_set():
             try:
                 reply = itr.recv(50)
                 if self.logger_level <= logging.DEBUG and len(reply) > 40:
@@ -334,20 +331,25 @@ class ControllerServer:
 
     def pair(self):
         """Listens for and pairs with an incoming Nintendo Switch connection."""
-        while True:
-            try:
-                self.state["state"] = "connecting"
-                itr, ctrl = self.backend.accept()
-                self.protocol.process_commands(None)
-                itr.sendall(self.protocol.get_report())
-                itr.setblocking(False)
-
-                self._run_pairing_handshake(itr)
-                break
-            except OSError as e:
-                self.logger.debug(e)
-
-        return itr, ctrl
+        try:
+            self.state["state"] = "connecting"
+            self.logger.debug("Waiting for incoming HID connections...")
+            ex = ThreadPoolExecutor()
+            future = ex.submit(self.backend.accept)
+            while not self.stop_event.is_set():
+                if future.done():
+                    itr, ctrl = future.result()
+                    self.logger.debug(
+                        f"Accepted connection from {itr.getpeername()[0]}"
+                    )
+                    itr.setblocking(False)
+                    self.protocol.process_commands(None)
+                    itr.sendall(self.protocol.get_report())
+                    self._run_pairing_handshake(itr)
+                    return itr, ctrl
+        except OSError as e:
+            self.logger.debug(e)
+        return None, None
 
     def reconnect(self, reconnect_address):
         """Reconnects to a Switch at the given address.
@@ -361,9 +363,3 @@ class ControllerServer:
         self.protocol.process_commands(None)
         itr.sendall(self.protocol.get_report())
         return itr, ctrl
-
-    def shutdown(self):
-        try:
-            self.backend.shutdown()
-        except Exception:
-            pass

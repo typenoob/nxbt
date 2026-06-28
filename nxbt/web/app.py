@@ -3,7 +3,8 @@ import os
 from threading import RLock
 from socket import gethostname
 
-import eventlet
+import uvicorn
+from a2wsgi import WSGIMiddleware
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 
@@ -15,13 +16,13 @@ from ..backends import BACKENDS
 app = Flask(
     __name__,
     static_url_path="",
-    template_folder=load_file("templates"),
-    static_folder=load_file("static"),
+    template_folder=load_file("web/templates"),
+    static_folder=load_file("web/static"),
 )
 nxbt = None
 
 # Configuring/retrieving secret key
-secrets_path = load_file("secrets.txt", True)
+secrets_path = load_file("web/secrets.txt")
 if not os.path.isfile(secrets_path):
     secret_key = os.urandom(24).hex()
     with open(secrets_path, "w", encoding="utf-8") as f:
@@ -33,7 +34,9 @@ else:
 app.config["SECRET_KEY"] = secret_key
 
 # Starting socket server with Flask app
-sio = SocketIO(app, cookie=False)
+sio = SocketIO(app, cookie=False, async_mode="threading")
+
+app_asgi = WSGIMiddleware(app)
 
 user_info_lock = RLock()
 USER_INFO = {}
@@ -119,8 +122,8 @@ def start_web_app(
     if usessl:
         if cert_path is None:
             # Store certs in the package directory
-            cert_path = load_file("cert.pem", True)
-            key_path = load_file("key.pem", True)
+            cert_path = load_file("web/cert.pem")
+            key_path = load_file("web/key.pem")
         else:
             # If specified, store certs at the user's preferred location
             cert_path = os.path.join(cert_path, "cert.pem")
@@ -152,14 +155,15 @@ def start_web_app(
             with open(key_path, "wb") as f:
                 f.write(key)
 
-        eventlet.wsgi.server(
-            eventlet.wrap_ssl(
-                eventlet.listen((ip, port)), certfile=cert_path, keyfile=key_path
-            ),
-            app,
+        uvicorn.run(
+            app_asgi,
+            host=ip,
+            port=port,
+            ssl_keyfile=key_path,
+            ssl_certfile=cert_path,
         )
     else:
-        eventlet.wsgi.server(eventlet.listen((ip, port)), app)
+        uvicorn.run(app_asgi, host=ip, port=port)
 
 
 if __name__ == "__main__":

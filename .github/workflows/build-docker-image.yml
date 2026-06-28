@@ -41,6 +41,12 @@ jobs:
           - libc: gnu
             platform: linux/386
             id: gnu-i386
+          - libc: msys2
+            platform: linux/amd64
+            id: mingw64
+          - libc: msys2
+            platform: linux/amd64
+            id: ucrt64
 
     steps:
       - run: |
@@ -78,6 +84,13 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare Uppercase Environment Variable
+        id: prep
+        run: |
+          # Convert matrix.id to uppercase using bash string manipulation
+          ID_RAW="${{ matrix.id }}"
+          echo "msystem_upper=${ID_RAW^^}" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
@@ -86,14 +99,19 @@ jobs:
           push: true
           tags: ${{ env.name }}/nxbt:${{ inputs.tag }}-${{ matrix.id }}
           file: docker/${{ matrix.libc }}/Dockerfile
+          build-args: |
+            MSYSTEM=${{ steps.prep.outputs.msystem_upper }}
   
       - name: Create the container
         run: docker create --platform ${{ matrix.platform }} --name extract $name/nxbt:${{ inputs.tag }}-${{ matrix.id }}
       
-      - name: Copy the elf file
+      - name: Copy the executable
         run: |
-          sudo docker cp extract:/nxbt/release/nxbt /nxbt-${{ matrix.id }}
-
+          if [ "${{ matrix.libc }}" = "msys2" ]; then
+            sudo docker cp extract:/root/.wine/drive_c/msys64/usr/bin/nxbt.exe /nxbt-${{ matrix.id }}.exe
+          else
+            sudo docker cp extract:/nxbt/release/nxbt /nxbt-${{ matrix.id }}
+          fi
       - name: Archive production artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -153,4 +171,11 @@ jobs:
               -t $name/nxbt:${{ inputs.tag }}-musl \
               -t $name/nxbt:musl \
               $musl_images
+          fi
+          msys2_images=$(echo $matrix | jq -r --arg var $name '[.[]|select(.libc=="msys2")|.id="\($var)/nxbt:${{ inputs.tag }}-\(.id)"|.id]|join(" ")')
+          if [ -n "$msys2_images" ]; then
+            docker buildx imagetools create \
+              -t $name/nxbt:${{ inputs.tag }}-msys2 \
+              -t $name/nxbt:msys2 \
+              $msys2_images
           fi

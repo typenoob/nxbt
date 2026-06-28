@@ -55,36 +55,14 @@ nxbt requires privileged access to interact with Bluetooth hardware. Running the
 | **Bumble (USB)** | None (if libusb works) | Direct USB communication, no kernel socket needed |
 | **BlueZ** | `cap_net_admin`, `cap_net_bind_service` | Binding to raw HCI sockets (`HCI_CHANNEL_CONTROL`), Binding to L2CAP PSM |
 
-### Option 1: File capabilities (recommended, persistent)
-
-Grant capabilities directly to the NXBT binary. This works across sessions and does not depend on ambient capability inheritance:
-
-```bash
-sudo setcap 'cap_net_admin,cap_net_bind_service+eip' $(readlink -f $(which nxbt))
+Run once as root to install file capabilities on the binary:
+```sh
+sudo env HOME="$HOME" nxbt
 ```
 
-Then run normally:
-
-```bash
+After that, run normally without sudo:
+```sh
 nxbt demo
-```
-
-### Option 2: capsh (temporary, per-session)
-
-Use `capsh` to launch nxbt with the required ambient capabilities:
-
-```bash
-# Bumble (HCI socket) backend
-sudo capsh --caps="cap_net_admin,cap_net_bind_service+eip cap_setpcap,cap_setuid,cap_setgid+ep" \
-  --keep=1 --user=$USER \
-  --addamb=cap_net_admin,cap_net_bind_service -- \
-  -c "nxbt demo"
-
-# BlueZ backend
-sudo capsh --caps="cap_net_admin+eip cap_setpcap,cap_setuid,cap_setgid+ep" \
-  --keep=1 --user=$USER \
-  --addamb=cap_net_admin -- \
-  -c "nxbt -b bluez demo"
 ```
 
 ### BlueZ backend: systemd override

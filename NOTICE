@@ -4,8 +4,8 @@ This product includes files from google/bumble
 (https://github.com/google/bumble), which are licensed under the
 Apache License, Version 2.0.
 
-  lib/bumble/hci.pyx   — Copyright 2021-2022 Google LLC
-  lib/bumble/l2cap.pyx — Copyright 2021-2022 Google LLC
+  vendor/bumble/hci.pyx   — Copyright 2021-2022 Google LLC
+  vendor/bumble/l2cap.pyx — Copyright 2021-2022 Google LLC
 
 A copy of the Apache License, Version 2.0 is included in this distribution
 at LICENSE-APACHE-2.0.

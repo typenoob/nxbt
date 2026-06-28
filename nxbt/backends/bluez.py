@@ -45,7 +45,8 @@ class BlueZBackend(Backend):
 
     def shutdown(self):
         """Clean up the transport, bridges, and event loop."""
-
+        self.itr.close()
+        self.ctrl.close()
         # Re-enable the BlueZ plugins, if we have permission
         toggle_clean_bluez(False)
 
@@ -86,24 +87,26 @@ class BlueZBackend(Backend):
             self.logger.debug(e)
 
     def accept(self) -> tuple:
-        s_ctrl = socket.socket(
+        self.ctrl = socket.socket(
             family=socket.AF_BLUETOOTH,
             type=socket.SOCK_SEQPACKET,
             proto=socket.BTPROTO_L2CAP,
         )
-        s_itr = socket.socket(
+        self.itr = socket.socket(
             family=socket.AF_BLUETOOTH,
             type=socket.SOCK_SEQPACKET,
             proto=socket.BTPROTO_L2CAP,
         )
+        self.ctrl.setblocking(False)
+        self.itr.setblocking(False)
         try:
-            s_ctrl.bind((self._bt.address, 17))
-            s_itr.bind((self._bt.address, 19))
+            self.ctrl.bind((self._bt.address, 17))
+            self.itr.bind((self._bt.address, 19))
         except OSError:
-            s_ctrl.bind((socket.BDADDR_ANY, 17))
-            s_itr.bind((socket.BDADDR_ANY, 19))
-        s_itr.listen(1)
-        s_ctrl.listen(1)
+            self.ctrl.bind((socket.BDADDR_ANY, 17))
+            self.itr.bind((socket.BDADDR_ANY, 19))
+        self.itr.listen(1)
+        self.ctrl.listen(1)
 
         self._bt.setup_auto_accept_pairing()
         self._bt.set_discoverable(True)
@@ -116,21 +119,26 @@ class BlueZBackend(Backend):
             name="nxbt-bt-crw",
         )
         self._crw_thread.start()
-
-        itr, _ = s_itr.accept()
-        ctrl, _ = s_ctrl.accept()
+        while True:
+            try:
+                itr, _ = self.itr.accept()
+                ctrl, _ = self.ctrl.accept()
+                break
+            except BlockingIOError:
+                continue
+            except OSError:
+                return None, None
 
         self._crw_running = False
-
         return itr, ctrl
 
     def reconnect(self, reconnect_address) -> tuple:
-        ctrl = socket.socket(
+        self.ctrl = socket.socket(
             family=socket.AF_BLUETOOTH,
             type=socket.SOCK_SEQPACKET,
             proto=socket.BTPROTO_L2CAP,
         )
-        itr = socket.socket(
+        self.itr = socket.socket(
             family=socket.AF_BLUETOOTH,
             type=socket.SOCK_SEQPACKET,
             proto=socket.BTPROTO_L2CAP,
@@ -144,14 +152,12 @@ class BlueZBackend(Backend):
 
         for address in addresses:
             try:
-                ctrl.connect((address, 17))
-                itr.connect((address, 19))
-                return itr, ctrl
+                self.ctrl.connect((address, 17))
+                self.itr.connect((address, 19))
+                return self.itr, self.ctrl
             except OSError:
                 pass
 
-        itr.close()
-        ctrl.close()
         raise OSError(
             "Unable to reconnect to sockets at the given address(es)",
             reconnect_address,

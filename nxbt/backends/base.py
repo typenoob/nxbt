@@ -22,11 +22,23 @@ class Backend(ABC):
 
     @abstractmethod
     def accept(self) -> tuple:
-        """Accept an incoming connection. Returns (itr_socket, ctrl_socket)."""
+        """Accept an incoming connection.
+        Returns:
+            tuple: (itr_socket, ctrl_socket)
+        Note:
+            This is a blocking synchronous call. It may be interrupted by shutdown.
+        """
 
     @abstractmethod
     def reconnect(self, address) -> tuple:
-        """Reconnect to a known address. Returns (itr_socket, ctrl_socket)."""
+        """Reconnect to a known address.
+        Args:
+            address: Target address to reconnect to.
+        Returns:
+            tuple: (itr_socket, ctrl_socket)
+        Note:
+            This is a blocking synchronous call. It may be interrupted by shutdown.
+        """
 
     @staticmethod
     @abstractmethod
@@ -52,6 +64,6 @@ class Backend(ABC):
         """Return previously connected Nintendo Switch addresses."""
         raise NotImplementedError
 
+    @abstractmethod
     def shutdown(self) -> None:
         """Release resources. Subclasses should override (e.g. reattach USB drivers)."""
-        pass

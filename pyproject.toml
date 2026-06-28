@@ -18,24 +18,27 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Libraries :: Python Modules"
 ]
-requires-python = ">=3.10, <3.14"
+requires-python = ">=3.10, <3.15"
 dependencies = [
     "Flask==3.1.0",
     "Flask-SocketIO==5.3.4",
-    "eventlet==0.40.3",
+    "uvicorn>=0.34.0",
+    "a2wsgi>=1.10.0",
     "blessed==1.17.10",
     "pynput==1.6.8",  # 1.7.0+ depends on evdev, which has no pre-built Linux wheels
-    "psutil==7.2.1",
+    "psutil>=7.0.0",
     "cryptography>=44.0.3",
     "jinja2==3.1.2",
     "itsdangerous==2.2",
     "Werkzeug==3.1.0",
     "bumble==0.0.229",
     "loguru>=0.7.0",
+    "libusb1>=2.0.1",
     "dbus-fast==2.45.1; sys_platform == 'linux'",
-    "zstandard>=0.25.0; platform_machine != 'i686' and platform_machine != 'armv7l'", # Can be removed after https://github.com/Nuitka/Nuitka/issues/3927 is resolved
+    "zstandard>=0.25.0",
 ]
 
 [project.optional-dependencies]
@@ -68,7 +71,7 @@ default = true
 
 [dependency-groups]
 dev = [
-    "nuitka>=4.1.1",
+    "nuitka @ git+https://github.com/typenoob/Nuitka.git@mingw-filename",
     "ruff==0.14.4",
     "pytest<=9.0.1",
     "pylint==4.0.5",

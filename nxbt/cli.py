@@ -5,6 +5,7 @@ import os
 import traceback
 from sys import exit
 
+from .setcap import set_file_cap
 from .nxbt import Nxbt, PRO_CONTROLLER
 from .backends import BACKENDS
 from .tui import InputTUI
@@ -413,6 +414,10 @@ def list_switch_addresses(args):
 
 
 def main(args=None):
+    try:
+        set_file_cap(os.readlink("/proc/self/exe"), "cap_net_admin,cap_net_bind_service+eip")
+    except (PermissionError, FileNotFoundError, OSError):
+        pass
     args = parser.parse_args(args)
     # Bumble backend need public address to reconnect
     if not args.backend or args.backend == "bumble":
