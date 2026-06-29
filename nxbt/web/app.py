@@ -1,105 +1,130 @@
 import json
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from threading import RLock
 from socket import gethostname
 
+import socketio
 import uvicorn
-from a2wsgi import WSGIMiddleware
-from flask import Flask, render_template, request
-from flask_socketio import SocketIO, emit
+from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from .cert import generate_cert
 from ..utils import load_file
 from ..nxbt import Nxbt, PRO_CONTROLLER
 from ..backends import BACKENDS
 
-app = Flask(
-    __name__,
-    static_url_path="",
-    template_folder=load_file("web/templates"),
-    static_folder=load_file("web/static"),
-)
 nxbt = None
 
-# Configuring/retrieving secret key
+# Configuring/retrieving secret key (reserved for future session use)
 secrets_path = load_file("web/secrets.txt")
 if not os.path.isfile(secrets_path):
     secret_key = os.urandom(24).hex()
     with open(secrets_path, "w", encoding="utf-8") as f:
         f.write(secret_key)
 else:
-    secret_key = None
     with open(secrets_path, "r", encoding="utf-8") as f:
         secret_key = f.read()
-app.config["SECRET_KEY"] = secret_key
 
-# Starting socket server with Flask app
-sio = SocketIO(app, cookie=False, async_mode="threading")
+static_dir = load_file("web/static")
+templates_dir = load_file("web/templates")
 
-app_asgi = WSGIMiddleware(app)
+app = FastAPI()
+templates = Jinja2Templates(directory=templates_dir)
+
+sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
+asgi_app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 user_info_lock = RLock()
 USER_INFO = {}
 
 
-@app.route("/")
-def index():
-    return render_template("index.html")
+def _run_async(coro, *, wait=True):
+    """Run a coroutine from sync Socket.IO handlers."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    if wait:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(asyncio.run, coro).result()
+
+    async def _runner():
+        return await coro
+
+    return loop.create_task(_runner())
 
 
-@sio.on("connect")
-def on_connect():
+def _emit_to(sid, event, data=None):
+    _run_async(sio.emit(event, data, to=sid), wait=False)
+
+
+@app.get("/")
+def index(request: Request):
+    return templates.TemplateResponse(request, "index.html")
+
+
+@sio.event
+def connect(sid, environ):
     with user_info_lock:
-        USER_INFO[request.sid] = {}
+        USER_INFO[sid] = {}
 
 
 @sio.on("state")
-def on_state():
+def on_state(sid):
     state_proxy = nxbt.state.copy()
     state = {}
     for controller in state_proxy.keys():
         state[controller] = state_proxy[controller].copy()
-    emit("state", state)
+    _emit_to(sid, "state", state)
 
 
-@sio.on("disconnect")
-def on_disconnect():
+@sio.event
+def disconnect(sid):
     print("Disconnected")
     with user_info_lock:
         try:
-            index = USER_INFO[request.sid]["controller_index"]
+            index = USER_INFO[sid]["controller_index"]
             nxbt.remove_controller(index)
         except KeyError:
             pass
         except (ValueError, OSError):
             pass
+        finally:
+            USER_INFO.pop(sid, None)
 
 
 @sio.on("shutdown")
-def on_shutdown(index):
+def on_shutdown(sid, index):
     nxbt.remove_controller(index)
 
 
 @sio.on("web_create_pro_controller")
-def on_create_controller():
+async def on_create_controller(sid):
     print("Create Controller")
 
-    try:
+    def _create():
         reconnect_addresses = nxbt.get_switch_addresses()
-        index = nxbt.create_controller(
+        return nxbt.create_controller(
             PRO_CONTROLLER, reconnect_address=reconnect_addresses
         )
-        with user_info_lock:
-            USER_INFO[request.sid]["controller_index"] = index
 
-        emit("create_pro_controller", index)
+    try:
+        # Run blocking BT work off the ASGI event loop (Flask-SocketIO used threads).
+        index = await asyncio.to_thread(_create)
+        with user_info_lock:
+            USER_INFO[sid]["controller_index"] = index
+
+        _emit_to(sid, "create_pro_controller", index)
     except Exception as e:
-        emit("error", str(e))
+        _emit_to(sid, "error", str(e))
 
 
 @sio.on("input")
-def handle_input(message):
-    # print("Webapp Input", time.perf_counter())
+def handle_input(sid, message):
     message = json.loads(message)
     index = message[0]
     input_packet = message[1]
@@ -107,11 +132,14 @@ def handle_input(message):
 
 
 @sio.on("macro")
-def handle_macro(message):
+def handle_macro(sid, message):
     message = json.loads(message)
     index = message[0]
     macro = message[1]
     nxbt.macro(index, macro)
+
+
+app.mount("/", StaticFiles(directory=static_dir), name="static")
 
 
 def start_web_app(
@@ -121,13 +149,12 @@ def start_web_app(
     nxbt = Nxbt(debug=debug, backend=BACKENDS[backend])
     if usessl:
         if cert_path is None:
-            # Store certs in the package directory
             cert_path = load_file("web/cert.pem")
             key_path = load_file("web/key.pem")
         else:
-            # If specified, store certs at the user's preferred location
-            cert_path = os.path.join(cert_path, "cert.pem")
-            key_path = os.path.join(cert_path, "key.pem")
+            cert_dir = cert_path
+            cert_path = os.path.join(cert_dir, "cert.pem")
+            key_path = os.path.join(cert_dir, "key.pem")
         if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
             print(
                 "\n"
@@ -156,15 +183,22 @@ def start_web_app(
                 f.write(key)
 
         uvicorn.run(
-            app_asgi,
+            asgi_app,
             host=ip,
             port=port,
             access_log=debug,
+            log_level="debug" if debug else "info",
             ssl_keyfile=key_path,
             ssl_certfile=cert_path,
         )
     else:
-        uvicorn.run(app_asgi, host=ip, port=port, access_log=debug)
+        uvicorn.run(
+            asgi_app,
+            host=ip,
+            port=port,
+            access_log=debug,
+            log_level="debug" if debug else "info",
+        )
 
 
 if __name__ == "__main__":

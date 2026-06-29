@@ -1,9 +1,11 @@
 #   Python test originally created or extracted from Hannah's work (https://github.com/hannahbee91/nxbt).
 #   Some modifications might have been made to adapt to my own project.
 
-import pytest
+import asyncio
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -33,48 +35,36 @@ def app_module(mock_nxbt_web, mock_nxbt):
 
 def test_state_emission(app_module):
     """Test that on_state reads state and emits it."""
-    emitted = []
+    mock_emit = AsyncMock()
 
-    def capture(event, *args):
-        emitted.append({"name": event, "args": args})
+    with patch.object(app_module.sio, "emit", mock_emit):
+        app_module.on_state("test_sid")
 
-    with patch("nxbt.web.app.emit", capture):
-        app_module.on_state()
-
-    assert len(emitted) == 1
-    assert emitted[0]["name"] == "state"
-    state_data = emitted[0]["args"][0]
+    mock_emit.assert_called_once()
+    event, state_data = mock_emit.call_args[0]
+    assert event == "state"
+    assert mock_emit.call_args.kwargs["to"] == "test_sid"
     assert 0 in state_data
     assert state_data[0]["state"] == "connected"
 
 
 def test_controller_creation(app_module, mock_nxbt):
     """Test that on_create_controller creates a controller."""
-    emitted = []
-
-    def capture(event, *args):
-        emitted.append({"name": event, "args": args})
-
-    # Pre-populate USER_INFO and mock request in the module's namespace
+    mock_emit = AsyncMock()
     app_module.USER_INFO["test_sid"] = {}
-    mock_request = MagicMock()
-    mock_request.sid = "test_sid"
 
-    with (
-        patch("nxbt.web.app.emit", capture),
-        patch.object(app_module, "request", mock_request, create=True),
-    ):
-        app_module.on_create_controller()
+    with patch.object(app_module.sio, "emit", mock_emit):
+        asyncio.run(app_module.on_create_controller("test_sid"))
 
     mock_nxbt.create_controller.assert_called_once()
-    events = [e["name"] for e in emitted]
+    events = [call.args[0] for call in mock_emit.await_args_list]
     assert "create_pro_controller" in events
 
 
 def test_macro_execution(app_module, mock_nxbt):
     """Test that handle_macro passes the correct args to nxbt.macro."""
     macro_payload = json.dumps([0, "B 0.1s A 0.1s"])
-    app_module.handle_macro(macro_payload)
+    app_module.handle_macro("test_sid", macro_payload)
 
     mock_nxbt.macro.assert_called_once()
     call_args = mock_nxbt.macro.call_args
