@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from .cert import generate_cert
+from .. import __version__
 from ..utils import load_file
 from ..nxbt import Nxbt, PRO_CONTROLLER
 from ..backends import BACKENDS
@@ -64,7 +65,7 @@ def _emit_to(sid, event, data=None):
 
 @app.get("/")
 def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"version": __version__})
 
 
 @sio.event
