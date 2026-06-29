@@ -13,6 +13,16 @@ def mock_nxbt():
         yield mock
 
 
+@pytest.fixture(autouse=True)
+def mock_bluetooth_adapters():
+    """Machines without Bluetooth still need adapter discovery mocked."""
+    with patch(
+        "nxbt.backends.BumbleBackend.get_available_adapters",
+        return_value=["hci-socket:0"],
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_find_devices():
     with patch("nxbt.backends.BumbleBackend.get_switch_addresses") as mock:
