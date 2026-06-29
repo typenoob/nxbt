@@ -13,6 +13,7 @@ if ctypes.util.find_library("cap"):
 else:
     libcap = None
 
+
 def set_file_cap(path: str, spec: str) -> None:
     if not libcap:
         return

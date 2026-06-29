@@ -415,7 +415,9 @@ def list_switch_addresses(args):
 
 def main(args=None):
     try:
-        set_file_cap(os.readlink("/proc/self/exe"), "cap_net_admin,cap_net_bind_service+eip")
+        set_file_cap(
+            os.readlink("/proc/self/exe"), "cap_net_admin,cap_net_bind_service+eip"
+        )
     except (PermissionError, FileNotFoundError, OSError):
         pass
     args = parser.parse_args(args)
