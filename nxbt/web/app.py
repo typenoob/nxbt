@@ -99,7 +99,13 @@ def disconnect(sid):
 
 @sio.on("shutdown")
 def on_shutdown(sid, index):
-    nxbt.remove_controller(index)
+    try:
+        nxbt.remove_controller(index)
+    except ValueError:
+        pass
+    with user_info_lock:
+        if USER_INFO.get(sid, {}).get("controller_index") == index:
+            USER_INFO[sid].pop("controller_index", None)
 
 
 @sio.on("web_create_pro_controller")
@@ -128,7 +134,10 @@ def handle_input(sid, message):
     message = json.loads(message)
     index = message[0]
     input_packet = message[1]
-    nxbt.set_controller_input(index, input_packet)
+    try:
+        nxbt.set_controller_input(index, input_packet)
+    except ValueError:
+        pass
 
 
 @sio.on("macro")
@@ -136,7 +145,10 @@ def handle_macro(sid, message):
     message = json.loads(message)
     index = message[0]
     macro = message[1]
-    nxbt.macro(index, macro)
+    try:
+        nxbt.macro(index, macro)
+    except ValueError:
+        pass
 
 
 app.mount("/", StaticFiles(directory=static_dir), name="static")

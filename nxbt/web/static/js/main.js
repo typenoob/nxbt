@@ -390,7 +390,7 @@ function createProController() {
 }
 
 function shutdownController() {
-    if (STATE[NXBT_CONTROLLER_INDEX]) {
+    if (NXBT_CONTROLLER_INDEX !== false && STATE[NXBT_CONTROLLER_INDEX]) {
         socket.emit('shutdown', NXBT_CONTROLLER_INDEX);
     }
 }
@@ -421,6 +421,7 @@ function checkForLoad() {
                 HTML_CONTROLLER_CONFIG.classList.remove('hidden');
                 HTML_STATUS_INDICATOR.classList.remove('hidden');
                 setInterval(updateStatusIndicator, 1000);
+                eventLoopActive = true;
                 eventLoop();
             }, 1000);
         } else if (controller_state === ControllerState.CRASHED) {
@@ -587,7 +588,11 @@ function updateGamepadDisplay() {
 let timeOld = false;
 let frequency = (1/120) * 1000;
 let useRAF = true;
+let eventLoopActive = false;
 function eventLoop() {
+    if (!eventLoopActive || NXBT_CONTROLLER_INDEX === false || !STATE[NXBT_CONTROLLER_INDEX]) {
+        return;
+    }
     // Update x/y ratio for the sticks based on
     // pressed buttons if we're using a keyboard
     if (INPUT_DEVICE == InputDevice.KEYBOARD) {

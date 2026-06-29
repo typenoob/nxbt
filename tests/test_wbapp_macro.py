@@ -71,3 +71,10 @@ def test_macro_execution(app_module, mock_nxbt):
     assert call_args[0][0] == 0
     assert "B" in call_args[0][1]
     assert "A" in call_args[0][1]
+
+
+def test_handle_input_ignores_missing_controller(app_module, mock_nxbt):
+    mock_nxbt.set_controller_input.side_effect = ValueError(
+        "Specified controller does not exist"
+    )
+    app_module.handle_input("test_sid", json.dumps([0, {}]))
