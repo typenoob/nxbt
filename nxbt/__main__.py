@@ -16,8 +16,8 @@
 # nuitka-project: --product-version=0.1.0
 # nuitka-project: --output-dir=release
 # nuitka-project: --no-deployment-flag=self-execution
-# nuitka-project: --include-data-dir=./nxbt/web/static=web/static
-# nuitka-project: --include-data-dir=./nxbt/web/templates=web/templates
+# nuitka-project: --include-data-dir=./nxbt/web/static=nxbt/web/static
+# nuitka-project: --include-data-dir=./nxbt/web/templates=nxbt/web/templates
 # nuitka-project: --nofollow-import-to=grpc
 # nuitka-project: --include-windows-runtime-dlls=no
 # nuitka-project: --onefile-tempdir-spec={CACHE_DIR}/nxbt
