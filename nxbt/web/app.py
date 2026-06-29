@@ -159,11 +159,12 @@ def start_web_app(
             app_asgi,
             host=ip,
             port=port,
+            access_log=debug,
             ssl_keyfile=key_path,
             ssl_certfile=cert_path,
         )
     else:
-        uvicorn.run(app_asgi, host=ip, port=port)
+        uvicorn.run(app_asgi, host=ip, port=port, access_log=debug)
 
 
 if __name__ == "__main__":
