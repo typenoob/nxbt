@@ -878,7 +878,6 @@ class _ControllerManager:
         )
 
     def remove_controller(self, index):
-        self._children[index].terminate()
         self._children[index].join(5)
         self.state.pop(index, None)
 

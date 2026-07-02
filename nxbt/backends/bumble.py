@@ -584,12 +584,9 @@ class BumbleBackend(Backend):
                     raise OSError(
                         "You may reconnect on the pair sceeen, force to repair"
                     )
-                elif (
-                    e.error_code
-                    in (
-                        HCI_AUTHENTICATION_FAILURE_ERROR,
-                        HCI_CONNECTION_REJECTED_DUE_TO_UNACCEPTABLE_BD_ADDR_ERROR,
-                    )
+                elif e.error_code in (
+                    HCI_AUTHENTICATION_FAILURE_ERROR,
+                    HCI_CONNECTION_REJECTED_DUE_TO_UNACCEPTABLE_BD_ADDR_ERROR,
                 ):
                     raise OSError("Your bonded device is untrusted, force to repair")
             self._bridges.append(itr_bridge)

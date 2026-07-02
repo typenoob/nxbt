@@ -51,8 +51,9 @@ def _configure_logger(debug=False, log_to_file=False, disable_logging=False):
 
 
 # Auto-configure on import so child/grandchild processes get logging immediately.
-_install_intercept_handlers()
-_configure_logger(debug=False)
+if __name__ == "__main__":
+    _install_intercept_handlers()
+    _configure_logger(debug=False)
 
 
 def create_logger(debug=False, log_to_file=False, disable_logging=False):

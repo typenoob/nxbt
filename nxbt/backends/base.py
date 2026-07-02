@@ -18,7 +18,10 @@ class Backend(ABC):
 
     @abstractmethod
     def setup(self, controller_type) -> None:
-        """Initialize the backend and configure adapter for the given controller type."""
+        """Initialize the backend and configure adapter for the given controller type.
+        Note:
+            This is a blocking synchronous call. It may be interrupted by shutdown.
+        """
 
     @abstractmethod
     def accept(self) -> tuple:

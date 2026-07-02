@@ -1,5 +1,5 @@
-from concurrent.futures import ThreadPoolExecutor
-import os
+from concurrent.futures import ThreadPoolExecutor, wait
+from multiprocessing import Event
 import signal
 import time
 import queue
@@ -78,6 +78,17 @@ class ControllerServer:
         self.tick = 1
         self.cached_msg = ""
 
+        self._need_shutdown = True
+
+    def run_with_stop_event(self, stop_event: Event, func, *args, **kwargs):
+        ex = ThreadPoolExecutor()
+        future = ex.submit(func, *args, **kwargs)
+        while not self.stop_event.is_set():
+            if future.done():
+                return future.result()
+        self.backend.shutdown()
+        self._need_shutdown = False
+
     def run(self, reconnect_address=None):
         """Runs the mainloop of the controller server.
 
@@ -100,7 +111,9 @@ class ControllerServer:
             if self.lock:
                 self.lock.acquire()
             try:
-                self.backend.setup(self.controller_type)
+                self.run_with_stop_event(
+                    self.stop_event, self.backend.setup, self.controller_type
+                )
                 if reconnect_address:
                     try:
                         itr, ctrl = self.reconnect(reconnect_address)
@@ -137,7 +150,8 @@ class ControllerServer:
             self.logger.debug(self.state["errors"])
             return self.state
         finally:
-            self.backend.shutdown()
+            if self._need_shutdown:
+                self.backend.shutdown()
 
     def mainloop(self, itr, ctrl):
         duration_start = time.perf_counter()
@@ -328,19 +342,13 @@ class ControllerServer:
         try:
             self.state["state"] = "connecting"
             self.logger.debug("Waiting for incoming HID connections...")
-            ex = ThreadPoolExecutor()
-            future = ex.submit(self.backend.accept)
-            while not self.stop_event.is_set():
-                if future.done():
-                    itr, ctrl = future.result()
-                    self.logger.debug(
-                        f"Accepted connection from {itr.getpeername()[0]}"
-                    )
-                    itr.setblocking(False)
-                    self.protocol.process_commands(None)
-                    itr.sendall(self.protocol.get_report())
-                    self._run_pairing_handshake(itr)
-                    return itr, ctrl
+            itr, ctrl = self.run_with_stop_event(self.stop_event, self.backend.accept)
+            self.logger.debug(f"Accepted connection from {itr.getpeername()[0]}")
+            itr.setblocking(False)
+            self.protocol.process_commands(None)
+            itr.sendall(self.protocol.get_report())
+            self._run_pairing_handshake(itr)
+            return itr, ctrl
         except OSError as e:
             self.logger.debug(e)
         return None, None
@@ -352,6 +360,8 @@ class ControllerServer:
         :type reconnect_address: string or list
         """
         self.state["state"] = "reconnecting"
-        itr, ctrl = self.backend.reconnect(reconnect_address)
+        itr, ctrl = self.run_with_stop_event(
+            self.stop_event, self.backend.reconnect, reconnect_address
+        )
         itr.setblocking(False)
         return itr, ctrl
