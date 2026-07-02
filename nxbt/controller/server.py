@@ -94,8 +94,6 @@ class ControllerServer:
 
             self.state["state"] = "initializing"
 
-            paired = False
-
             # If we have a lock, prevent other controllers
             # from initializing at the same time and saturating the DBus,
             # potentially causing a kernel panic.
@@ -108,10 +106,8 @@ class ControllerServer:
                         itr, ctrl = self.reconnect(reconnect_address)
                     except OSError:
                         itr, ctrl = self.pair()
-                        paired = True
                 else:
                     itr, ctrl = self.pair()
-                    paired = True
             finally:
                 if self.lock:
                     self.lock.release()
@@ -130,8 +126,6 @@ class ControllerServer:
                     self.logger.debug(f"Failed to remove bond from {name}: {e}")
 
             self.state["state"] = "connected"
-            if paired:
-                self.input.buffer_macro("B 0.1s", os.urandom(24).hex())
             self.mainloop(itr, ctrl)
 
         except KeyboardInterrupt:
@@ -283,7 +277,6 @@ class ControllerServer:
                     self.lock.acquire()
                 try:
                     itr, ctrl = self.reconnect(self.switch_address)
-                    self._run_pairing_handshake(itr)
                     self.state["state"] = "connected"
                     return itr, ctrl
                 finally:
@@ -361,6 +354,4 @@ class ControllerServer:
         self.state["state"] = "reconnecting"
         itr, ctrl = self.backend.reconnect(reconnect_address)
         itr.setblocking(False)
-        self.protocol.process_commands(None)
-        itr.sendall(self.protocol.get_report())
         return itr, ctrl

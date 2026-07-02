@@ -4,15 +4,21 @@ import socket
 import threading
 import xml.etree.ElementTree as ET
 
-from bumble.core import UUID
+from bumble.core import UUID, ConnectionError
 from bumble.device import Device
-from bumble.hci import HCI_Write_Default_Link_Policy_Settings_Command
+from bumble.hci import (
+    HCI_AUTHENTICATION_FAILURE_ERROR,
+    HCI_CONNECTION_ALREADY_EXISTS_ERROR,
+    HCI_CONNECTION_REJECTED_DUE_TO_UNACCEPTABLE_BD_ADDR_ERROR,
+    HCI_PAGE_TIMEOUT_ERROR,
+    HCI_Error,
+    HCI_Write_Default_Link_Policy_Settings_Command,
+)
 from bumble.keys import JsonKeyStore
 from bumble.l2cap import ClassicChannel, ClassicChannelSpec
 from bumble.pairing import PairingConfig, PairingDelegate
 from bumble.sdp import DataElement, ServiceAttribute
 from bumble.transport import open_transport
-from usb1 import USBDevice
 
 from .internal.mgmt import MgmtClient
 
@@ -568,7 +574,24 @@ class BumbleBackend(Backend):
             self.logger.debug(f"BumbleBackend: reconnecting to {address}...")
             local_addr = str(self._device.public_address or self._device.random_address)
             self._bridges.clear()
-            itr_bridge, ctrl_bridge = self._run_async(create_bridges(address))
+            try:
+                itr_bridge, ctrl_bridge = self._run_async(create_bridges(address))
+            except (HCI_Error, ConnectionError) as e:
+                if e.error_code in (
+                    HCI_CONNECTION_ALREADY_EXISTS_ERROR,
+                    HCI_PAGE_TIMEOUT_ERROR,
+                ):
+                    raise OSError(
+                        "You may reconnect on the pair sceeen, force to repair"
+                    )
+                elif (
+                    e.error_code
+                    in (
+                        HCI_AUTHENTICATION_FAILURE_ERROR,
+                        HCI_CONNECTION_REJECTED_DUE_TO_UNACCEPTABLE_BD_ADDR_ERROR,
+                    )
+                ):
+                    raise OSError("Your bonded device is untrusted, force to repair")
             self._bridges.append(itr_bridge)
             itr = _BumbleSocket(itr_bridge.socket, address, local_addr)
             itr._bridge = itr_bridge
