@@ -117,7 +117,6 @@ class NxbtCommands(Enum):
     CLEAR_MACROS = 3
     CLEAR_ALL_MACROS = 4
     REMOVE_CONTROLLER = 5
-    QUIT = 6
 
 
 class Nxbt:
@@ -225,15 +224,6 @@ class Nxbt:
         """
         try:
             if hasattr(self, "controllers") and self.controllers.is_alive():
-                # Enqueue a QUIT message first so the worker can run its
-                # finally block (which calls cm.shutdown() to kill all
-                # controller children).
-                try:
-                    self.task_queue.put(
-                        {"command": NxbtCommands.QUIT, "arguments": {}}, block=False
-                    )
-                except Exception:
-                    pass
                 self._stop_event.set()
                 self.controllers.join(5)
             self.resource_manager.shutdown()
@@ -288,7 +278,6 @@ class Nxbt:
                                 msg["arguments"]["reconnect_address"],
                                 debug=debug,
                                 log_to_file=log_to_file,
-                                stop_event=stop_event,
                             )
                         except Exception:
                             idx = msg["arguments"]["controller_index"]
@@ -308,11 +297,9 @@ class Nxbt:
                     elif msg["command"] == NxbtCommands.CLEAR_MACROS:
                         cm.clear_macros(msg["arguments"]["controller_index"])
                     elif msg["command"] == NxbtCommands.REMOVE_CONTROLLER:
-                        index = msg["arguments"]["controller_index"]
-                        cm.clear_macros(index)
-                        cm.remove_controller(index)
-                    elif msg["command"] == NxbtCommands.QUIT:
-                        sys.exit(0)
+                        idx = msg["arguments"]["controller_index"]
+                        cm.clear_macros(idx)
+                        cm.remove_controller(idx)
         finally:
             cm.shutdown()
 
@@ -798,7 +785,6 @@ class _ControllerManager:
         reconnect_address=None,
         debug=False,
         log_to_file=False,
-        stop_event=None,
     ):
         """Instantiates a given controller as a multiprocessing
         Process with a shared state dict and a task queue.
@@ -845,7 +831,6 @@ class _ControllerManager:
             backend=self.backend(adapter_path),
             lock=self.lock,
             state=controller_state,
-            stop_event=stop_event,
             task_queue=controller_queue,
             colour_body=colour_body,
             colour_buttons=colour_buttons,
@@ -878,12 +863,14 @@ class _ControllerManager:
         )
 
     def remove_controller(self, index):
+        self.state[index]["state"] = "removing"
         self._children[index].join(5)
+        self._children.pop(index, None)
         self.state.pop(index, None)
 
     def shutdown(self):
-        # Loop over children and kill all
-        for _, child in self._children.items():
+        # Loop over children and wait for all
+        for index, child in self._children.items():
+            self.state[index]["state"] = "removing"
             child.join(5)
-
         self.controller_resources.shutdown()

@@ -22,7 +22,6 @@ class ControllerServer:
         controller_type,
         backend,
         state=None,
-        stop_event=None,
         task_queue=None,
         lock=None,
         colour_body=None,
@@ -39,15 +38,7 @@ class ControllerServer:
 
         if state:
             self.state = state
-        else:
-            self.state = {
-                "state": "",
-                "finished_macros": [],
-                "errors": None,
-                "direct_input": None,
-            }
 
-        self.stop_event = stop_event
         self.task_queue = task_queue
 
         self.controller_type = controller_type
@@ -78,16 +69,18 @@ class ControllerServer:
         self.tick = 1
         self.cached_msg = ""
 
-        self._need_shutdown = True
+    def is_running(self):
+        if self.state["state"] == "removing":
+            self.backend.shutdown()
+            return False
+        return True
 
-    def run_with_stop_event(self, stop_event: Event, func, *args, **kwargs):
+    def run_with_check(self, func, *args, **kwargs):
         ex = ThreadPoolExecutor()
         future = ex.submit(func, *args, **kwargs)
-        while not self.stop_event.is_set():
+        while self.is_running():
             if future.done():
                 return future.result()
-        self.backend.shutdown()
-        self._need_shutdown = False
 
     def run(self, reconnect_address=None):
         """Runs the mainloop of the controller server.
@@ -111,9 +104,7 @@ class ControllerServer:
             if self.lock:
                 self.lock.acquire()
             try:
-                self.run_with_stop_event(
-                    self.stop_event, self.backend.setup, self.controller_type
-                )
+                self.run_with_check(self.backend.setup, self.controller_type)
                 if reconnect_address:
                     try:
                         itr, ctrl = self.reconnect(reconnect_address)
@@ -149,13 +140,10 @@ class ControllerServer:
             self.logger.debug("Error during connecting:")
             self.logger.debug(self.state["errors"])
             return self.state
-        finally:
-            if self._need_shutdown:
-                self.backend.shutdown()
 
     def mainloop(self, itr, ctrl):
         duration_start = time.perf_counter()
-        while not self.stop_event.is_set():
+        while self.is_running():
             # Start timing command processing
             timer_start = time.perf_counter()
 
@@ -186,12 +174,10 @@ class ControllerServer:
             # Set Direct Input
             if self.state["direct_input"]:
                 self.input.set_controller_input(self.state["direct_input"])
-
             self.protocol.process_commands(reply)
             self.input.set_protocol_input(state=self.state)
 
             msg = self.protocol.get_report()
-
             if self.logger_level <= logging.DEBUG and reply and len(reply) > 45:
                 self.logger.debug(format_msg_controller(msg))
 
@@ -225,7 +211,6 @@ class ControllerServer:
             duration_end = time.perf_counter()
             duration_elapsed = duration_end - duration_start
             duration_start = duration_end
-
             sleep_time = 1 / 132 - duration_elapsed
             if sleep_time >= 0:
                 time.sleep(sleep_time)
@@ -241,7 +226,7 @@ class ControllerServer:
 
     def _run_pairing_handshake(self, itr):
         received_first_message = False
-        while not self.stop_event.is_set():
+        while self.is_running():
             try:
                 reply = itr.recv(50)
                 if self.logger_level <= logging.DEBUG and len(reply) > 40:
@@ -342,7 +327,7 @@ class ControllerServer:
         try:
             self.state["state"] = "connecting"
             self.logger.debug("Waiting for incoming HID connections...")
-            itr, ctrl = self.run_with_stop_event(self.stop_event, self.backend.accept)
+            itr, ctrl = self.run_with_check(self.backend.accept)
             self.logger.debug(f"Accepted connection from {itr.getpeername()[0]}")
             itr.setblocking(False)
             self.protocol.process_commands(None)
@@ -360,8 +345,6 @@ class ControllerServer:
         :type reconnect_address: string or list
         """
         self.state["state"] = "reconnecting"
-        itr, ctrl = self.run_with_stop_event(
-            self.stop_event, self.backend.reconnect, reconnect_address
-        )
+        itr, ctrl = self.run_with_check(self.backend.reconnect, reconnect_address)
         itr.setblocking(False)
         return itr, ctrl

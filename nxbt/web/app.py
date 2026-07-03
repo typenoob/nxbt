@@ -7,6 +7,7 @@ from socket import gethostname
 
 import socketio
 import uvicorn
+from engineio.payload import Payload
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -17,201 +18,232 @@ from ..utils import load_file
 from ..nxbt import Nxbt, PRO_CONTROLLER
 from ..backends import BACKENDS
 
-nxbt = None
-
-# Configuring/retrieving secret key (reserved for future session use)
-secrets_path = load_file("web/secrets.txt")
-if not os.path.isfile(secrets_path):
-    secret_key = os.urandom(24).hex()
-    with open(secrets_path, "w", encoding="utf-8") as f:
-        f.write(secret_key)
-else:
-    with open(secrets_path, "r", encoding="utf-8") as f:
-        secret_key = f.read()
-
-static_dir = load_file("web/static")
-templates_dir = load_file("web/templates")
-
-app = FastAPI()
-templates = Jinja2Templates(directory=templates_dir)
-
-sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
-asgi_app = socketio.ASGIApp(sio, other_asgi_app=app)
-
-user_info_lock = RLock()
-USER_INFO = {}
+# Polling payloads can batch many input packets; default limit (16) is too low.
+Payload.max_decode_packets = 64
 
 
-def _run_async(coro, *, wait=True):
-    """Run a coroutine from sync Socket.IO handlers."""
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
+class WebApp:
+    def __init__(self, nxbt=None, *, debug=False, backend="bumble"):
+        self.nxbt = nxbt
+        self._debug = debug
+        self._backend = backend
+        self._user_info = {}
+        self._user_info_lock = RLock()
+        self._load_secret_key()
 
-    if wait:
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(asyncio.run, coro).result()
+        static_dir = load_file("web/static")
+        templates_dir = load_file("web/templates")
 
-    async def _runner():
-        return await coro
+        self.app = FastAPI()
+        self.templates = Jinja2Templates(directory=templates_dir)
+        self.sio = socketio.AsyncServer(
+            cors_allowed_origins="*",
+            async_mode="asgi",
+            ping_timeout=60,
+            ping_interval=25,
+        )
+        self.asgi_app = socketio.ASGIApp(self.sio, other_asgi_app=self.app)
 
-    return loop.create_task(_runner())
+        self._register_routes(static_dir)
+        self._register_socketio_handlers()
 
+    def _load_secret_key(self):
+        secrets_path = load_file("web/secrets.txt")
+        if not os.path.isfile(secrets_path):
+            secret_key = os.urandom(24).hex()
+            with open(secrets_path, "w", encoding="utf-8") as f:
+                f.write(secret_key)
+        else:
+            with open(secrets_path, "r", encoding="utf-8") as f:
+                secret_key = f.read()
+        self.secret_key = secret_key
 
-def _emit_to(sid, event, data=None):
-    _run_async(sio.emit(event, data, to=sid), wait=False)
+    def _register_routes(self, static_dir):
+        @self.app.get("/")
+        def index(request: Request):
+            return self.templates.TemplateResponse(
+                request, "index.html", {"version": __version__}
+            )
 
+        self.app.mount("/", StaticFiles(directory=static_dir), name="static")
 
-@app.get("/")
-def index(request: Request):
-    return templates.TemplateResponse(request, "index.html", {"version": __version__})
+    def _register_socketio_handlers(self):
+        self.sio.event(self.connect)
+        self.sio.on("state")(self.on_state)
+        self.sio.event(self.disconnect)
+        self.sio.on("shutdown")(self.on_shutdown)
+        self.sio.on("web_create_pro_controller")(self.on_create_controller)
+        self.sio.on("input")(self.handle_input)
+        self.sio.on("macro")(self.handle_macro)
 
-
-@sio.event
-def connect(sid, environ):
-    with user_info_lock:
-        USER_INFO[sid] = {}
-
-
-@sio.on("state")
-def on_state(sid):
-    state_proxy = nxbt.state.copy()
-    state = {}
-    for controller in state_proxy.keys():
-        state[controller] = state_proxy[controller].copy()
-    _emit_to(sid, "state", state)
-
-
-@sio.event
-def disconnect(sid):
-    print("Disconnected")
-    with user_info_lock:
+    def _run_async(self, coro, *, wait=True):
+        """Run a coroutine from sync Socket.IO handlers."""
         try:
-            index = USER_INFO[sid]["controller_index"]
-            nxbt.remove_controller(index)
-        except KeyError:
-            pass
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(coro)
+
+        if wait:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                return executor.submit(asyncio.run, coro).result()
+
+        async def _runner():
+            return await coro
+
+        return loop.create_task(_runner())
+
+    def _emit_to(self, sid, event, data=None):
+        self._run_async(self.sio.emit(event, data, to=sid), wait=False)
+
+    def connect(self, sid, environ):
+        with self._user_info_lock:
+            self._user_info[sid] = {}
+
+    def on_state(self, sid):
+        state_proxy = self.nxbt.state.copy()
+        state = {}
+        for controller in state_proxy.keys():
+            state[controller] = state_proxy[controller].copy()
+        self._emit_to(sid, "state", state)
+
+    async def disconnect(self, sid):
+        print("Disconnected")
+        asyncio.create_task(self._cleanup_session(sid))
+
+    async def _cleanup_session(self, sid):
+        index = None
+        with self._user_info_lock:
+            session = self._user_info.pop(sid, None)
+            if session:
+                index = session.get("controller_index")
+        if index is None:
+            return
+        try:
+            await asyncio.to_thread(self.nxbt.remove_controller, index)
         except (ValueError, OSError):
             pass
-        finally:
-            USER_INFO.pop(sid, None)
 
+    def on_shutdown(self, sid, index):
+        try:
+            self.nxbt.remove_controller(index)
+        except ValueError:
+            pass
+        with self._user_info_lock:
+            if self._user_info.get(sid, {}).get("controller_index") == index:
+                self._user_info[sid].pop("controller_index", None)
 
-@sio.on("shutdown")
-def on_shutdown(sid, index):
-    try:
-        nxbt.remove_controller(index)
-    except ValueError:
-        pass
-    with user_info_lock:
-        if USER_INFO.get(sid, {}).get("controller_index") == index:
-            USER_INFO[sid].pop("controller_index", None)
+    async def on_create_controller(self, sid):
+        print("Create Controller")
 
+        def _create():
+            reconnect_addresses = self.nxbt.get_switch_addresses()
+            return self.nxbt.create_controller(
+                PRO_CONTROLLER, reconnect_address=reconnect_addresses
+            )
 
-@sio.on("web_create_pro_controller")
-async def on_create_controller(sid):
-    print("Create Controller")
+        try:
+            index = await asyncio.to_thread(_create)
+            with self._user_info_lock:
+                self._user_info[sid]["controller_index"] = index
 
-    def _create():
-        reconnect_addresses = nxbt.get_switch_addresses()
-        return nxbt.create_controller(
-            PRO_CONTROLLER, reconnect_address=reconnect_addresses
+            self._emit_to(sid, "create_pro_controller", index)
+        except Exception as e:
+            self._emit_to(sid, "error", str(e))
+
+    def handle_input(self, sid, message):
+        message = json.loads(message)
+        index = message[0]
+        input_packet = message[1]
+        try:
+            self.nxbt.set_controller_input(index, input_packet)
+        except ValueError:
+            pass
+
+    def handle_macro(self, sid, message):
+        message = json.loads(message)
+        index = message[0]
+        macro = message[1]
+        try:
+            self.nxbt.macro(index, macro)
+        except ValueError:
+            pass
+
+    def run(
+        self,
+        ip="0.0.0.0",
+        port=8000,
+        usessl=False,
+        cert_path=None,
+        debug=None,
+    ):
+        if self.nxbt is None:
+            self.nxbt = Nxbt(
+                debug=self._debug if debug is None else debug,
+                backend=BACKENDS[self._backend],
+            )
+        if debug is not None:
+            self._debug = debug
+
+        uvicorn_kwargs = {
+            "host": ip,
+            "port": port,
+            "access_log": self._debug,
+            "log_level": "debug" if self._debug else "info",
+        }
+
+        if usessl:
+            cert_path, key_path = self._resolve_ssl_paths(cert_path)
+            if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
+                self._print_ssl_warning()
+                print("Generating certificates...")
+                cert, key = generate_cert(gethostname())
+                with open(cert_path, "wb") as f:
+                    f.write(cert)
+                with open(key_path, "wb") as f:
+                    f.write(key)
+            uvicorn_kwargs["ssl_keyfile"] = key_path
+            uvicorn_kwargs["ssl_certfile"] = cert_path
+
+        uvicorn.run(self.asgi_app, **uvicorn_kwargs)
+
+    def _resolve_ssl_paths(self, cert_path):
+        if cert_path is None:
+            return load_file("web/cert.pem"), load_file("web/key.pem")
+        cert_dir = cert_path
+        return (
+            os.path.join(cert_dir, "cert.pem"),
+            os.path.join(cert_dir, "key.pem"),
         )
 
-    try:
-        # Run blocking BT work off the ASGI event loop (Flask-SocketIO used threads).
-        index = await asyncio.to_thread(_create)
-        with user_info_lock:
-            USER_INFO[sid]["controller_index"] = index
-
-        _emit_to(sid, "create_pro_controller", index)
-    except Exception as e:
-        _emit_to(sid, "error", str(e))
-
-
-@sio.on("input")
-def handle_input(sid, message):
-    message = json.loads(message)
-    index = message[0]
-    input_packet = message[1]
-    try:
-        nxbt.set_controller_input(index, input_packet)
-    except ValueError:
-        pass
-
-
-@sio.on("macro")
-def handle_macro(sid, message):
-    message = json.loads(message)
-    index = message[0]
-    macro = message[1]
-    try:
-        nxbt.macro(index, macro)
-    except ValueError:
-        pass
-
-
-app.mount("/", StaticFiles(directory=static_dir), name="static")
+    @staticmethod
+    def _print_ssl_warning():
+        print(
+            "\n"
+            "-----------------------------------------\n"
+            "---------------->WARNING<----------------\n"
+            "The NXBT webapp is being run with self-\n"
+            "signed SSL certificates for use on your\n"
+            "local network.\n"
+            "\n"
+            "These certificates ARE NOT safe for\n"
+            "production use. Please generate valid\n"
+            "SSL certificates if you plan on using the\n"
+            "NXBT webapp anywhere other than your own\n"
+            "network.\n"
+            "-----------------------------------------\n"
+            "\n"
+            "The above warning will only be shown once\n"
+            "on certificate generation."
+            "\n"
+        )
 
 
 def start_web_app(
     ip="0.0.0.0", port=8000, usessl=False, cert_path=None, debug=False, backend="bumble"
 ):
-    global nxbt
-    nxbt = Nxbt(debug=debug, backend=BACKENDS[backend])
-    if usessl:
-        if cert_path is None:
-            cert_path = load_file("web/cert.pem")
-            key_path = load_file("web/key.pem")
-        else:
-            cert_dir = cert_path
-            cert_path = os.path.join(cert_dir, "cert.pem")
-            key_path = os.path.join(cert_dir, "key.pem")
-        if not os.path.isfile(cert_path) or not os.path.isfile(key_path):
-            print(
-                "\n"
-                "-----------------------------------------\n"
-                "---------------->WARNING<----------------\n"
-                "The NXBT webapp is being run with self-\n"
-                "signed SSL certificates for use on your\n"
-                "local network.\n"
-                "\n"
-                "These certificates ARE NOT safe for\n"
-                "production use. Please generate valid\n"
-                "SSL certificates if you plan on using the\n"
-                "NXBT webapp anywhere other than your own\n"
-                "network.\n"
-                "-----------------------------------------\n"
-                "\n"
-                "The above warning will only be shown once\n"
-                "on certificate generation."
-                "\n"
-            )
-            print("Generating certificates...")
-            cert, key = generate_cert(gethostname())
-            with open(cert_path, "wb") as f:
-                f.write(cert)
-            with open(key_path, "wb") as f:
-                f.write(key)
-
-        uvicorn.run(
-            asgi_app,
-            host=ip,
-            port=port,
-            access_log=debug,
-            log_level="debug" if debug else "info",
-            ssl_keyfile=key_path,
-            ssl_certfile=cert_path,
-        )
-    else:
-        uvicorn.run(
-            asgi_app,
-            host=ip,
-            port=port,
-            access_log=debug,
-            log_level="debug" if debug else "info",
-        )
+    WebApp(debug=debug, backend=backend).run(
+        ip=ip, port=port, usessl=usessl, cert_path=cert_path, debug=debug
+    )
 
 
 if __name__ == "__main__":
