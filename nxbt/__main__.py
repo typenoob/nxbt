@@ -19,6 +19,8 @@
 # nuitka-project: --include-data-dir=./nxbt/web/static=nxbt/web/static
 # nuitka-project: --include-data-dir=./nxbt/web/templates=nxbt/web/templates
 # nuitka-project: --nofollow-import-to=grpc
+# nuitka-project: --nofollow-import-to=bumble.apps
+# nuitka-project: --nofollow-import-to=bumble.audio
 # nuitka-project: --include-windows-runtime-dlls=no
 # nuitka-project: --onefile-tempdir-spec={CACHE_DIR}/nxbt
 
