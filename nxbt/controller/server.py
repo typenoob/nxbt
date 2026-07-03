@@ -134,9 +134,9 @@ class ControllerServer:
 
         except KeyboardInterrupt:
             pass
-        except Exception:
+        except Exception as e:
             self.state["state"] = "crashed"
-            self.state["errors"] = traceback.format_exc()
+            self.state["errors"] = str(e)
             self.logger.debug("Error during connecting:")
             self.logger.debug(self.state["errors"])
             return self.state
