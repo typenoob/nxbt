@@ -410,9 +410,69 @@ class BumbleBackend(Backend):
         except Exception as e:
             self.logger.debug(f"Intel driver patch skipped: {e}")
 
+    def _patch_intel_firmware_download(self):
+        try:
+            from bumble.tools import intel_fw_download
+
+            intel_fw_download.LINUX_KERNEL_GIT_SOURCE = "https://github.com/endlessm/linux-firmware/raw/refs/heads/master/intel/"
+
+            from bumble.drivers import intel as intel_drv
+            from bumble.tools.intel_fw_download import main as intel_fw_download
+
+            if getattr(intel_drv._find_binary_path, "_nxbt_patched", False):
+                return
+            _orig = intel_drv._find_binary_path
+
+            def _find_binary_path(file_name: str):
+                path = _orig(file_name)
+                if path is not None or not file_name.endswith(".sfi"):
+                    return path
+                base = file_name.removesuffix(".sfi")
+                intel_fw_download(
+                    ["--single", base],
+                    standalone_mode=False,
+                )
+                return _orig(file_name)
+
+            _find_binary_path._nxbt_patched = True
+            intel_drv._find_binary_path = _find_binary_path
+        except Exception as e:
+            self.logger.debug(f"Intel firmware patch skipped: {e}")
+
+    def _patch_rtk_firmware_download(self):
+        try:
+            from bumble.tools import rtk_fw_download
+
+            rtk_fw_download.LINUX_KERNEL_GIT_SOURCE = "https://github.com/endlessm/linux-firmware/raw/refs/heads/master/rtl_bt/"
+
+            from bumble.drivers import rtk as rtk_drv
+            from bumble.tools.rtk_fw_download import main as rtk_fw_download
+
+            if getattr(rtk_drv.Driver.find_binary_path, "_nxbt_patched", False):
+                return
+            _orig = rtk_drv.Driver.find_binary_path
+
+            def _find_binary_path(file_name: str):
+                path = _orig(file_name)
+                if path is not None or not file_name.endswith(".bin"):
+                    return path
+                base = file_name.removesuffix("_fw.bin")
+                rtk_fw_download(
+                    ["--single", base],
+                    standalone_mode=False,
+                )
+                return _orig(file_name)
+
+            _find_binary_path._nxbt_patched = True
+            rtk_drv.Driver.find_binary_path = _find_binary_path
+        except Exception as e:
+            self.logger.debug(f"Rtk firmware patch skipped: {e}")
+
     def _setup_async(self, controller_type):
         """Async setup of the Bumble device."""
         self._patch_intel_driver_variant()
+        self._patch_intel_firmware_download()
+        self._patch_rtk_firmware_download()
         if self._transport_spec.startswith("hci"):
             with MgmtClient() as mgmt:
                 self._hci_old_state = (
