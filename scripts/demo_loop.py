@@ -75,7 +75,7 @@ def demo():
     """
 
     nx = Nxbt(debug=False)
-    adapters = nx.get_available_adapters()
+    adapters = nx.get_available_adapters()["adapters"]
     if len(adapters) < 1:
         raise OSError("Unable to detect any Bluetooth adapters.")
 

@@ -20,7 +20,9 @@ def mock_bluetooth_adapters():
         m.setattr(
             BumbleBackend,
             "get_available_adapters",
-            staticmethod(lambda: ["hci-socket:0"]),
+            staticmethod(
+                lambda: {"adapters": ["hci-socket:0"], "has_permissions": True}
+            ),
         )
         yield m
 

@@ -218,18 +218,28 @@ socket.on('create_pro_controller', function(index) {
 
 socket.on('adapters', function(data) {
     adaptersAvailable = data.available;
+    if (!data.available) {
+        noAdaptersInfo = {
+            title: data.title,
+            message: data.message,
+        };
+    }
 });
 
-socket.on('no_adapters', function(message) {
-    showNoAdaptersDialog(message);
+socket.on('no_adapters', function(data) {
+    showNoAdaptersDialog(data);
 });
 
 let adaptersAvailable = true;
+let noAdaptersInfo = null;
 
 socket.on('error', function(errorMessage) {
     if (!HTML_LOADER.classList.contains('hidden')) {
         if (errorMessage.includes("No adapters")) {
-            showNoAdaptersDialog(errorMessage);
+            showNoAdaptersDialog(noAdaptersInfo || {
+                title: "No Adapters Available",
+                message: errorMessage,
+            });
             return;
         }
         exitLoadingState();
@@ -407,10 +417,13 @@ function exitLoadingState() {
     HTML_CONTROLLER_SELECTION.classList.remove('hidden');
 }
 
-function showNoAdaptersDialog(message) {
+function showNoAdaptersDialog(info) {
     exitLoadingState();
-    HTML_ALERT_DIALOG_TITLE.textContent = "No Adapters Available";
-    HTML_ALERT_DIALOG_MESSAGE.textContent = message;
+    if (typeof info === "string") {
+        info = { title: "No Adapters Available", message: info };
+    }
+    HTML_ALERT_DIALOG_TITLE.textContent = info.title || "No Adapters Available";
+    HTML_ALERT_DIALOG_MESSAGE.textContent = info.message;
     HTML_ALERT_DIALOG.classList.remove('hidden');
 }
 
@@ -418,14 +431,15 @@ function dismissAlertDialog() {
     HTML_ALERT_DIALOG.classList.add('hidden');
 }
 
-const NO_ADAPTERS_MESSAGE = (
-    "No Bluetooth adapters were detected. "
-    + "Please ensure your system has Bluetooth capability and try again."
-);
-
 function createProController() {
     if (!adaptersAvailable) {
-        showNoAdaptersDialog(NO_ADAPTERS_MESSAGE);
+        showNoAdaptersDialog(noAdaptersInfo || {
+            title: "No Adapters Available",
+            message: (
+                "No Bluetooth adapters were detected. "
+                + "Please ensure your system has Bluetooth capability and try again."
+            ),
+        });
         return;
     }
 

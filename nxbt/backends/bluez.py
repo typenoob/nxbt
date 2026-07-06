@@ -16,7 +16,8 @@ from .internal.bluez import (
 from .internal.rfkill import get_blocked_hci_indices
 from ..controller.controller import ControllerTypes
 from ..controller.sdp import SWITCH_CONTROLLER_SDP
-from .base import Backend
+from ..setcap import has_bluez_caps
+from .base import AdapterAvailability, Backend
 
 
 class BlueZBackend(Backend):
@@ -51,10 +52,15 @@ class BlueZBackend(Backend):
         toggle_clean_bluez(False)
 
     @staticmethod
-    def get_available_adapters() -> list:
+    def get_available_adapters() -> AdapterAvailability:
         paths = find_objects(SERVICE_NAME, ADAPTER_INTERFACE)
         blocked = get_blocked_hci_indices()
-        return [p for p in paths if not any(p.endswith(f"hci{i}") for i in blocked)]
+        detected = [p for p in paths if not any(p.endswith(f"hci{i}") for i in blocked)]
+        if not detected:
+            return {"adapters": [], "has_permissions": True}
+        if not has_bluez_caps():
+            return {"adapters": [], "has_permissions": False}
+        return {"adapters": detected, "has_permissions": True}
 
     @staticmethod
     def get_switch_addresses() -> list:

@@ -51,8 +51,13 @@ def test_controller_creation(web_app, mock_nxbt):
     mock_emit = AsyncMock()
     web_app._user_info["test_sid"] = {}
 
-    with patch.object(web_app.sio, "emit", mock_emit), patch.object(
-        web_app, "_get_adapters", return_value=["hci-socket:0"]
+    with (
+        patch.object(web_app.sio, "emit", mock_emit),
+        patch.object(
+            web_app,
+            "_get_adapter_availability",
+            return_value={"adapters": ["hci-socket:0"], "has_permissions": True},
+        ),
     ):
         asyncio.run(web_app.on_create_controller("test_sid"))
 
@@ -66,17 +71,40 @@ def test_controller_creation_no_adapters(web_app, mock_nxbt):
     mock_emit = AsyncMock()
     web_app._user_info["test_sid"] = {}
 
-    with patch.object(web_app.sio, "emit", mock_emit), patch.object(
-        web_app, "_get_adapters", return_value=[]
+    with (
+        patch.object(web_app.sio, "emit", mock_emit),
+        patch.object(
+            web_app,
+            "_get_adapter_availability",
+            return_value={"adapters": [], "has_permissions": False},
+        ),
     ):
         asyncio.run(web_app.on_create_controller("test_sid"))
 
     mock_nxbt.create_controller.assert_not_called()
-    mock_emit.assert_awaited_once()
-    assert mock_emit.await_args.args[0] == "no_adapters"
+    payload = mock_emit.await_args.args[1]
+    assert payload["title"] == "Permissions Required"
+    assert "required permissions" in payload["message"]
 
 
-def test_macro_execution(web_app, mock_nxbt):
+def test_controller_creation_no_adapters_detected(web_app, mock_nxbt):
+    """Test that no detected adapters emits the no-adapters payload."""
+    mock_emit = AsyncMock()
+    web_app._user_info["test_sid"] = {}
+
+    with (
+        patch.object(web_app.sio, "emit", mock_emit),
+        patch.object(
+            web_app,
+            "_get_adapter_availability",
+            return_value={"adapters": [], "has_permissions": True},
+        ),
+    ):
+        asyncio.run(web_app.on_create_controller("test_sid"))
+
+    mock_nxbt.create_controller.assert_not_called()
+    payload = mock_emit.await_args.args[1]
+    assert payload["title"] == "No Adapters Available"
     """Test that handle_macro passes the correct args to nxbt.macro."""
     macro_payload = json.dumps([0, "B 0.1s A 0.1s"])
     web_app.handle_macro("test_sid", macro_payload)

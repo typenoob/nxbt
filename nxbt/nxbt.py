@@ -582,7 +582,8 @@ class Nxbt:
         :rtype: int
         """
         if adapter_path:
-            if adapter_path not in self.get_available_adapters():
+            available_adapters = self.get_available_adapters()["adapters"]
+            if adapter_path not in available_adapters:
                 raise ValueError("Specified adapter is unavailable")
 
             if adapter_path in self._adapters_in_use:
@@ -590,7 +591,8 @@ class Nxbt:
         else:
             # Get all adapters we can use
             usable_adapters = list(
-                set(self.get_available_adapters()) - set(self._adapters_in_use)
+                set(self.get_available_adapters()["adapters"])
+                - set(self._adapters_in_use)
             )
             if len(usable_adapters) > 0:
                 # Use the first available adapter
@@ -707,10 +709,10 @@ class Nxbt:
             pass
 
     def get_available_adapters(self):
-        """Gets the adapter identifiers of all available adapters.
+        """Gets available adapters and whether required permissions are present.
 
-        :return: A list of available adapter identifiers
-        :rtype: list
+        :return: Adapter availability with ``adapters`` and ``has_permissions``
+        :rtype: dict
         """
 
         return self._backend.get_available_adapters()

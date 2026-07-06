@@ -19,6 +19,7 @@ from .. import __version__
 from ..utils import load_file
 from ..nxbt import Nxbt, PRO_CONTROLLER
 from ..backends import BACKENDS
+from ..setcap import GRANT_CAPS_HINT
 
 # Polling payloads can batch many input packets; default limit (16) is too low.
 Payload.max_decode_packets = 64
@@ -26,6 +27,11 @@ Payload.max_decode_packets = 64
 NO_ADAPTERS_MESSAGE = (
     "No Bluetooth adapters were detected. "
     "Please ensure your system has Bluetooth capability and try again."
+)
+
+PERMISSIONS_REQUIRED_MESSAGE = (
+    "Bluetooth adapters were found on your system, but none are available "
+    "because NXBT does not have the required permissions.\n\n" + GRANT_CAPS_HINT
 )
 
 
@@ -104,14 +110,28 @@ class WebApp:
     def _emit_to(self, sid, event, data=None):
         self._run_async(self.sio.emit(event, data, to=sid), wait=False)
 
-    def _get_adapters(self):
+    def _get_adapter_availability(self):
         return BACKENDS[self._backend].get_available_adapters()
+
+    def _no_adapters_payload(self, availability) -> dict:
+        if not availability["has_permissions"]:
+            return {
+                "title": "Permissions Required",
+                "message": PERMISSIONS_REQUIRED_MESSAGE,
+            }
+        return {
+            "title": "No Adapters Available",
+            "message": NO_ADAPTERS_MESSAGE,
+        }
 
     def connect(self, sid, environ):
         with self._user_info_lock:
             self._user_info[sid] = {}
-        adapters = self._get_adapters()
-        self._emit_to(sid, "adapters", {"available": len(adapters) > 0})
+        availability = self._get_adapter_availability()
+        payload = {"available": len(availability["adapters"]) > 0}
+        if not availability["adapters"]:
+            payload.update(self._no_adapters_payload(availability))
+        self._emit_to(sid, "adapters", payload)
 
     def on_state(self, sid):
         state_proxy = self.nxbt.state.copy()
@@ -149,8 +169,9 @@ class WebApp:
     async def on_create_controller(self, sid):
         print("Create Controller")
 
-        if not self._get_adapters():
-            self._emit_to(sid, "no_adapters", NO_ADAPTERS_MESSAGE)
+        availability = self._get_adapter_availability()
+        if not availability["adapters"]:
+            self._emit_to(sid, "no_adapters", self._no_adapters_payload(availability))
             return
 
         def _create():
@@ -167,7 +188,10 @@ class WebApp:
             self._emit_to(sid, "create_pro_controller", index)
         except ValueError as e:
             if "No adapters available" in str(e):
-                self._emit_to(sid, "no_adapters", NO_ADAPTERS_MESSAGE)
+                availability = self._get_adapter_availability()
+                self._emit_to(
+                    sid, "no_adapters", self._no_adapters_payload(availability)
+                )
             else:
                 self._emit_to(sid, "error", str(e))
         except Exception as e:

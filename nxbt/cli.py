@@ -227,8 +227,13 @@ def demo(args):
     and runs a demo macro.
     """
     backend = make_backend(args)
-    adapters = backend.get_available_adapters()
-    if len(adapters) < 1:
+    availability = backend.get_available_adapters()
+    adapters = availability["adapters"]
+    if not adapters:
+        if not availability["has_permissions"]:
+            from .setcap import GRANT_CAPS_HINT
+
+            raise OSError(f"Missing Bluetooth permissions. {GRANT_CAPS_HINT}")
         raise OSError("Unable to detect any Bluetooth adapters.")
 
     nx = Nxbt(
@@ -264,7 +269,8 @@ def test(args):
     print("[1] Attempting to initialize NXBT...")
     nx = None
     backend = make_backend(args)
-    adapters = backend.get_available_adapters()
+    availability = backend.get_available_adapters()
+    adapters = availability["adapters"]
     try:
         nx = Nxbt(
             debug=args.debug,
@@ -279,9 +285,15 @@ def test(args):
 
     # Adapter Check
     print("[2] Checking for Bluetooth adapter availability...")
-    if len(adapters) < 1:
-        print("Unable to detect any Bluetooth adapters.")
-        print("Please ensure you system has Bluetooth capability.")
+    if not adapters:
+        if not availability["has_permissions"]:
+            from .setcap import GRANT_CAPS_HINT
+
+            print("Bluetooth adapters were found but NXBT lacks required permissions.")
+            print(GRANT_CAPS_HINT)
+        else:
+            print("Unable to detect any Bluetooth adapters.")
+            print("Please ensure you system has Bluetooth capability.")
         exit(1)
     print(f"{len(adapters)} Bluetooth adapter(s) available.")
     print("Adapters:", adapters, "\n")
@@ -361,7 +373,8 @@ def macro(args):
         return
 
     backend = make_backend(args)
-    adapters = backend.get_available_adapters()
+    availability = backend.get_available_adapters()
+    adapters = availability["adapters"]
     adapter = adapters[0] if adapters else None
 
     nx = Nxbt(

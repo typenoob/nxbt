@@ -17,7 +17,10 @@ class TestNxbt:
     @pytest.fixture
     def nxbt_instance(self):
         mock_backend = MagicMock()
-        mock_backend.get_available_adapters.return_value = ["hci0"]
+        mock_backend.get_available_adapters.return_value = {
+            "adapters": ["hci0"],
+            "has_permissions": True,
+        }
         mock_backend.get_switch_addresses.return_value = []
         # type(mock_backend) == MagicMock, so set methods on the class too
         MagicMock.get_available_adapters = mock_backend.get_available_adapters
@@ -42,7 +45,10 @@ class TestNxbt:
     def test_create_controller_no_adapters(self):
         """Test create_controller raises error when no adapters available."""
         mock_backend = MagicMock()
-        mock_backend.get_available_adapters.return_value = []
+        mock_backend.get_available_adapters.return_value = {
+            "adapters": [],
+            "has_permissions": True,
+        }
 
         with (
             patch("nxbt.nxbt.Process"),

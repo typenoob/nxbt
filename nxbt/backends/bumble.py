@@ -24,7 +24,8 @@ from .internal.mgmt import MgmtClient
 
 from ..controller.controller import ControllerTypes
 from ..controller.sdp import SWITCH_CONTROLLER_SDP
-from .base import Backend
+from ..setcap import has_cap_net_admin
+from .base import AdapterAvailability, Backend
 
 HID_CONTROL_PSM = 0x0011
 HID_INTERRUPT_PSM = 0x0013
@@ -186,8 +187,8 @@ class BumbleBackend(Backend):
     }
 
     @staticmethod
-    def get_available_adapters() -> list[str]:
-        """Scan for HCI adapters via HCI sockets or USB."""
+    def _detect_adapters() -> list[str]:
+        """Scan for HCI and USB adapters without applying capability filters."""
         adapters = []
 
         if hasattr(socket, "BTPROTO_HCI"):
@@ -207,7 +208,6 @@ class BumbleBackend(Backend):
                 except OSError:
                     continue
 
-        # Scan for USB Bluetooth adapters as fallback
         try:
             import usb1
 
@@ -241,6 +241,19 @@ class BumbleBackend(Backend):
         return adapters
 
     @staticmethod
+    def get_available_adapters() -> AdapterAvailability:
+        """Return adapters usable with current capabilities and permission status."""
+        detected = BumbleBackend._detect_adapters()
+        hci_detected = [a for a in detected if a.startswith("hci-socket:")]
+        adapters = []
+        for adapter in detected:
+            if adapter.startswith("hci-socket:") and not has_cap_net_admin():
+                continue
+            adapters.append(adapter)
+        has_permissions = not (hci_detected and not has_cap_net_admin())
+        return {"adapters": adapters, "has_permissions": has_permissions}
+
+    @staticmethod
     def get_switch_addresses() -> list[str]:
         addresses = []
         try:
@@ -260,7 +273,7 @@ class BumbleBackend(Backend):
         self.logger = logging.getLogger("nxbt")
         # Default to first available HCI socket adapter
         if adapter_idx is None:
-            adapters = self.get_available_adapters()
+            adapters = self.get_available_adapters()["adapters"]
             adapter_idx = adapters[0] if adapters else "hci-socket:0"
 
         self._transport_spec = adapter_idx

@@ -61,7 +61,7 @@ if __name__ == "__main__":
     nx = nxbt.Nxbt()
 
     # Get a list of all available Bluetooth adapters
-    adapters = nx.get_available_adapters()
+    adapters = nx.get_available_adapters()["adapters"]
     # Prepare a list to store the indexes of the
     # created controllers.
     controller_idxs = []

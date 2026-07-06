@@ -18,7 +18,7 @@ def mock_bluetooth_adapters():
     """Machines without Bluetooth still need adapter discovery mocked."""
     with patch(
         "nxbt.backends.BumbleBackend.get_available_adapters",
-        return_value=["hci-socket:0"],
+        return_value={"adapters": ["hci-socket:0"], "has_permissions": True},
     ):
         yield
 

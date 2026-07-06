@@ -1,4 +1,10 @@
 from abc import ABC, abstractmethod
+from typing import TypedDict
+
+
+class AdapterAvailability(TypedDict):
+    adapters: list
+    has_permissions: bool
 
 
 class Backend(ABC):
@@ -58,8 +64,8 @@ class Backend(ABC):
         """
 
     @staticmethod
-    def get_available_adapters() -> list:
-        """Return a list of available adapter identifiers."""
+    def get_available_adapters() -> AdapterAvailability:
+        """Return usable adapters and whether required permissions are present."""
         raise NotImplementedError
 
     @staticmethod
