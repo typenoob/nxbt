@@ -9,6 +9,7 @@ import random
 import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .tools import require_tool, run_command
@@ -33,7 +34,13 @@ PROPS_IFACE = "org.freedesktop.DBus.Properties"
 
 def _run_async(coro):
     """Run an async dbus call synchronously."""
-    return asyncio.run(coro)
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(asyncio.run, coro).result()
 
 
 async def _get_managed_objects(bus, service_name=SERVICE_NAME):
