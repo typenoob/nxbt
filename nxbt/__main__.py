@@ -23,6 +23,7 @@
 # nuitka-project: --nofollow-import-to=bumble.audio
 # nuitka-project: --include-windows-runtime-dlls=no
 # nuitka-project: --onefile-tempdir-spec={CACHE_DIR}/nxbt
+# nuitka-project: --update-check=never
 
 
 if "__compiled__" in globals():
