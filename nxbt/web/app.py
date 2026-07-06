@@ -8,9 +8,11 @@ from socket import gethostname
 import socketio
 import uvicorn
 from engineio.payload import Payload
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.routing import Mount, Route
+from starlette.staticfiles import StaticFiles
+from starlette.templating import Jinja2Templates
 
 from .cert import generate_cert
 from .. import __version__
@@ -34,8 +36,8 @@ class WebApp:
         static_dir = load_file("web/static")
         templates_dir = load_file("web/templates")
 
-        self.app = FastAPI()
         self.templates = Jinja2Templates(directory=templates_dir)
+        self.app = self._create_app(static_dir)
         self.sio = socketio.AsyncServer(
             cors_allowed_origins="*",
             async_mode="asgi",
@@ -43,8 +45,6 @@ class WebApp:
             ping_interval=25,
         )
         self.asgi_app = socketio.ASGIApp(self.sio, other_asgi_app=self.app)
-
-        self._register_routes(static_dir)
         self._register_socketio_handlers()
 
     def _load_secret_key(self):
@@ -58,14 +58,18 @@ class WebApp:
                 secret_key = f.read()
         self.secret_key = secret_key
 
-    def _register_routes(self, static_dir):
-        @self.app.get("/")
-        def index(request: Request):
+    def _create_app(self, static_dir):
+        async def index(request: Request):
             return self.templates.TemplateResponse(
                 request, "index.html", {"version": __version__}
             )
 
-        self.app.mount("/", StaticFiles(directory=static_dir), name="static")
+        return Starlette(
+            routes=[
+                Route("/", index),
+                Mount("/", StaticFiles(directory=static_dir), name="static"),
+            ]
+        )
 
     def _register_socketio_handlers(self):
         self.sio.event(self.connect)

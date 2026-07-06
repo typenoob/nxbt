@@ -42,7 +42,7 @@ install-deps:
 			$$MINGW_PACKAGE_PREFIX-python-zstandard \
 			$$MINGW_PACKAGE_PREFIX-python-aiohttp \
 			$$MINGW_PACKAGE_PREFIX-python-greenlet \
-			$$MINGW_PACKAGE_PREFIX-python-fastapi \
+			$$MINGW_PACKAGE_PREFIX-python-starlette \
 			$$MINGW_PACKAGE_PREFIX-python-markupsafe \
 			$$MINGW_PACKAGE_PREFIX-python-psutil; \
 	else \
