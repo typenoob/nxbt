@@ -9,6 +9,7 @@ from .internal.bluez import (
     BlueZ,
     find_objects,
     find_devices_by_alias,
+    has_bluez_override_access,
     toggle_clean_bluez,
     SERVICE_NAME,
     ADAPTER_INTERFACE,
@@ -58,7 +59,7 @@ class BlueZBackend(Backend):
         detected = [p for p in paths if not any(p.endswith(f"hci{i}") for i in blocked)]
         if not detected:
             return {"adapters": [], "has_permissions": True}
-        if not has_bluez_caps():
+        if not has_bluez_caps() or not has_bluez_override_access():
             return {"adapters": [], "has_permissions": False}
         return {"adapters": detected, "has_permissions": True}
 

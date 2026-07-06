@@ -63,3 +63,34 @@ def test_has_bluez_caps():
         return_value="cap_net_admin=eip",
     ):
         assert has_bluez_caps() is False
+
+
+def test_bluez_get_available_adapters_without_override_access():
+    from nxbt.backends.bluez import BlueZBackend
+
+    with (
+        patch("nxbt.backends.bluez.find_objects", return_value=["/org/bluez/hci0"]),
+        patch("nxbt.backends.bluez.get_blocked_hci_indices", return_value=set()),
+        patch("nxbt.backends.bluez.has_bluez_caps", return_value=True),
+        patch("nxbt.backends.bluez.has_bluez_override_access", return_value=False),
+    ):
+        result = BlueZBackend.get_available_adapters()
+
+    assert result == {"adapters": [], "has_permissions": False}
+
+
+def test_bluez_get_available_adapters_with_permissions():
+    from nxbt.backends.bluez import BlueZBackend
+
+    with (
+        patch("nxbt.backends.bluez.find_objects", return_value=["/org/bluez/hci0"]),
+        patch("nxbt.backends.bluez.get_blocked_hci_indices", return_value=set()),
+        patch("nxbt.backends.bluez.has_bluez_caps", return_value=True),
+        patch("nxbt.backends.bluez.has_bluez_override_access", return_value=True),
+    ):
+        result = BlueZBackend.get_available_adapters()
+
+    assert result == {
+        "adapters": ["/org/bluez/hci0"],
+        "has_permissions": True,
+    }

@@ -182,6 +182,47 @@ def find_objects(service_name, interface_name):
     return _run_async(_find())
 
 
+BLUEZ_OVERRIDE_DIR = Path("/run/systemd/system/bluetooth.service.d")
+BLUEZ_OVERRIDE_PATH = BLUEZ_OVERRIDE_DIR / "nxbt.conf"
+BLUEZ_OVERRIDE_CONTENT = "[Service]\nExecStart=\nExecStart=bluetoothd --noplugin=*"
+
+
+def _uses_systemd() -> bool:
+    res = run_command(["ps", "--no-headers", "-o", "comm", "1"])
+    return res.stdout.decode("utf-8").strip() == "systemd"
+
+
+def _reload_bluetooth() -> None:
+    run_command(["systemctl", "daemon-reload"])
+    run_command(["systemctl", "restart", "bluetooth"])
+    time.sleep(0.5)
+
+
+def has_bluez_override_access() -> bool:
+    """Return whether the BlueZ systemd override can be used or created."""
+    if not _uses_systemd():
+        return True
+    if BLUEZ_OVERRIDE_PATH.is_file():
+        return True
+    if BLUEZ_OVERRIDE_DIR.exists():
+        return os.access(BLUEZ_OVERRIDE_DIR, os.W_OK)
+    return os.access(BLUEZ_OVERRIDE_DIR.parent, os.W_OK)
+
+
+def ensure_bluez_override() -> None:
+    """Create the BlueZ systemd override if missing (requires root)."""
+    logger = logging.getLogger("nxbt")
+    if not _uses_systemd():
+        return
+    if BLUEZ_OVERRIDE_PATH.is_file():
+        return
+    BLUEZ_OVERRIDE_DIR.mkdir(parents=True, exist_ok=True)
+    with BLUEZ_OVERRIDE_PATH.open("w") as f:
+        f.write(BLUEZ_OVERRIDE_CONTENT)
+    _reload_bluetooth()
+    logger.debug("BlueZ systemd override installed")
+
+
 def toggle_clean_bluez(toggle):
     """Enables or disables all BlueZ plugins,
     Requires root user to be run. The units and Bluetooth
@@ -196,40 +237,23 @@ def toggle_clean_bluez(toggle):
     """
     logger = logging.getLogger("nxbt")
 
-    # Check systemd is present
-    res = run_command(["ps", "--no-headers", "-o", "comm", "1"])
-    if res.stdout.decode("utf-8").strip() != "systemd":
+    if not _uses_systemd():
         logger.debug("systemd not found")
         return
 
-    override_dir = Path("/run/systemd/system/bluetooth.service.d")
-    override_path = override_dir / "nxbt.conf"
-
     if toggle:
-        if override_path.is_file():
-            # Override exist, no need to restart bluetooth
+        if BLUEZ_OVERRIDE_PATH.is_file():
             return
-
-        override = f"[Service]\nExecStart=\nExecStart=bluetoothd --noplugin=*"
-
-        override_dir.mkdir(parents=True, exist_ok=True)
-        with override_path.open("w") as f:
-            f.write(override)
+        BLUEZ_OVERRIDE_DIR.mkdir(parents=True, exist_ok=True)
+        with BLUEZ_OVERRIDE_PATH.open("w") as f:
+            f.write(BLUEZ_OVERRIDE_CONTENT)
     else:
         try:
-            os.remove(override_path)
+            os.remove(BLUEZ_OVERRIDE_PATH)
         except (FileNotFoundError, PermissionError):
-            # Override doesn't exist, no need to restart bluetooth
             return
 
-    # Reload units
-    run_command(["systemctl", "daemon-reload"])
-
-    # Reload the bluetooth service with input disabled
-    run_command(["systemctl", "restart", "bluetooth"])
-
-    # Kill a bit of time here to ensure all services have restarted
-    time.sleep(0.5)
+    _reload_bluetooth()
     logger.debug("systemd found and bluetooth reloaded")
 
 
