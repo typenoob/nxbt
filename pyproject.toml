@@ -39,6 +39,7 @@ dependencies = [
     "libusb1>=2.0.1",
     "dbus-fast==2.45.1; sys_platform == 'linux'",
     "zstandard>=0.25.0",
+    "pydantic==2.12.5",
 ]
 
 [project.optional-dependencies]
