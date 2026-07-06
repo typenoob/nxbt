@@ -51,12 +51,29 @@ def test_controller_creation(web_app, mock_nxbt):
     mock_emit = AsyncMock()
     web_app._user_info["test_sid"] = {}
 
-    with patch.object(web_app.sio, "emit", mock_emit):
+    with patch.object(web_app.sio, "emit", mock_emit), patch.object(
+        web_app, "_get_adapters", return_value=["hci-socket:0"]
+    ):
         asyncio.run(web_app.on_create_controller("test_sid"))
 
     mock_nxbt.create_controller.assert_called_once()
     events = [call.args[0] for call in mock_emit.await_args_list]
     assert "create_pro_controller" in events
+
+
+def test_controller_creation_no_adapters(web_app, mock_nxbt):
+    """Test that missing adapters emits no_adapters."""
+    mock_emit = AsyncMock()
+    web_app._user_info["test_sid"] = {}
+
+    with patch.object(web_app.sio, "emit", mock_emit), patch.object(
+        web_app, "_get_adapters", return_value=[]
+    ):
+        asyncio.run(web_app.on_create_controller("test_sid"))
+
+    mock_nxbt.create_controller.assert_not_called()
+    mock_emit.assert_awaited_once()
+    assert mock_emit.await_args.args[0] == "no_adapters"
 
 
 def test_macro_execution(web_app, mock_nxbt):

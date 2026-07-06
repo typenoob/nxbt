@@ -23,6 +23,11 @@ from ..backends import BACKENDS
 # Polling payloads can batch many input packets; default limit (16) is too low.
 Payload.max_decode_packets = 64
 
+NO_ADAPTERS_MESSAGE = (
+    "No Bluetooth adapters were detected. "
+    "Please ensure your system has Bluetooth capability and try again."
+)
+
 
 class WebApp:
     def __init__(self, nxbt=None, *, debug=False, backend="bumble"):
@@ -99,9 +104,14 @@ class WebApp:
     def _emit_to(self, sid, event, data=None):
         self._run_async(self.sio.emit(event, data, to=sid), wait=False)
 
+    def _get_adapters(self):
+        return BACKENDS[self._backend].get_available_adapters()
+
     def connect(self, sid, environ):
         with self._user_info_lock:
             self._user_info[sid] = {}
+        adapters = self._get_adapters()
+        self._emit_to(sid, "adapters", {"available": len(adapters) > 0})
 
     def on_state(self, sid):
         state_proxy = self.nxbt.state.copy()
@@ -139,6 +149,10 @@ class WebApp:
     async def on_create_controller(self, sid):
         print("Create Controller")
 
+        if not self._get_adapters():
+            self._emit_to(sid, "no_adapters", NO_ADAPTERS_MESSAGE)
+            return
+
         def _create():
             reconnect_addresses = self.nxbt.get_switch_addresses()
             return self.nxbt.create_controller(
@@ -151,6 +165,11 @@ class WebApp:
                 self._user_info[sid]["controller_index"] = index
 
             self._emit_to(sid, "create_pro_controller", index)
+        except ValueError as e:
+            if "No adapters available" in str(e):
+                self._emit_to(sid, "no_adapters", NO_ADAPTERS_MESSAGE)
+            else:
+                self._emit_to(sid, "error", str(e))
         except Exception as e:
             self._emit_to(sid, "error", str(e))
 

@@ -20,6 +20,9 @@ let HTML_STATUS_INDICATOR_TEXT = document.getElementById("status-indicator-text"
 let HTML_KEYBOARD_MAP = document.getElementById("keyboard-map");
 let HTML_CONTROLLER_MAP = document.getElementById("controller-map");
 let HTML_ERROR_DISPLAY = document.getElementById("error-display");
+let HTML_ALERT_DIALOG = document.getElementById("alert-dialog");
+let HTML_ALERT_DIALOG_TITLE = document.getElementById("alert-dialog-title");
+let HTML_ALERT_DIALOG_MESSAGE = document.getElementById("alert-dialog-message");
 let HTML_CONTROLLER_SESSIONS = document.getElementById("controller-sessions");
 let HTML_CONTROLLER_SESSIONS_CONTAINER = document.getElementById("controller-session-container");
 
@@ -213,7 +216,24 @@ socket.on('create_pro_controller', function(index) {
     checkForLoadInterval = setInterval(checkForLoad, 1000);
 });
 
+socket.on('adapters', function(data) {
+    adaptersAvailable = data.available;
+});
+
+socket.on('no_adapters', function(message) {
+    showNoAdaptersDialog(message);
+});
+
+let adaptersAvailable = true;
+
 socket.on('error', function(errorMessage) {
+    if (!HTML_LOADER.classList.contains('hidden')) {
+        if (errorMessage.includes("No adapters")) {
+            showNoAdaptersDialog(errorMessage);
+            return;
+        }
+        exitLoadingState();
+    }
     displayError(errorMessage);
 });
 
@@ -378,7 +398,37 @@ function displayError(errorText) {
     }, 10000);
 }
 
+function exitLoadingState() {
+    if (checkForLoadInterval) {
+        clearInterval(checkForLoadInterval);
+        checkForLoadInterval = false;
+    }
+    HTML_LOADER.classList.add('hidden');
+    HTML_CONTROLLER_SELECTION.classList.remove('hidden');
+}
+
+function showNoAdaptersDialog(message) {
+    exitLoadingState();
+    HTML_ALERT_DIALOG_TITLE.textContent = "No Adapters Available";
+    HTML_ALERT_DIALOG_MESSAGE.textContent = message;
+    HTML_ALERT_DIALOG.classList.remove('hidden');
+}
+
+function dismissAlertDialog() {
+    HTML_ALERT_DIALOG.classList.add('hidden');
+}
+
+const NO_ADAPTERS_MESSAGE = (
+    "No Bluetooth adapters were detected. "
+    + "Please ensure your system has Bluetooth capability and try again."
+);
+
 function createProController() {
+    if (!adaptersAvailable) {
+        showNoAdaptersDialog(NO_ADAPTERS_MESSAGE);
+        return;
+    }
+
     HTML_CONTROLLER_SELECTION.classList.add('hidden');
     HTML_LOADER.classList.remove('hidden');
     HTML_LOADER_RECREATE_WRAPPER.classList.add('hidden');

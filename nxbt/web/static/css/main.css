@@ -634,3 +634,38 @@ Error Display Stying
     display: inline;
     color: #d9dada;
 }
+
+/**************************************************
+Alert Dialog
+**************************************************/
+
+.alert-dialog {
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.alert-dialog-content {
+    width: 90%;
+    max-width: 480px;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.alert-dialog-content h1 {
+    margin-top: 0;
+    font-size: 1.25rem;
+}
+
+.alert-dialog-content p {
+    font-size: 1rem;
+    margin: 1rem 0 1.5rem;
+}
+
+.alert-dialog-content button {
+    min-width: 6rem;
+}
