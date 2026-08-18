@@ -55,7 +55,7 @@ Issues = "https://github.com/typenoob/nxbt/issues"
 nxbt = "nxbt.cli:main"
 
 [build-system]
-requires = ["setuptools", "Cython"]
+requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

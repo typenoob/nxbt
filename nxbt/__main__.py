@@ -21,14 +21,14 @@
 # nuitka-project: --nofollow-import-to=grpc
 # nuitka-project: --nofollow-import-to=bumble.apps
 # nuitka-project: --nofollow-import-to=bumble.audio
+# nuitka-project: --noinclude-custom-mode=bumble.hci:bytecode
+# nuitka-project: --noinclude-custom-mode=bumble.l2cap:bytecode
 # nuitka-project: --include-windows-runtime-dlls=no
 # nuitka-project: --onefile-tempdir-spec={CACHE_DIR}/nxbt
 # nuitka-project: --update-check=never
 
 
 if "__compiled__" in globals():
-    import sys
-    import importlib
     import os
     from multiprocessing import set_start_method, get_start_method
 
@@ -38,12 +38,6 @@ if "__compiled__" in globals():
 
     # MSYS2 cryptography workaround
     os.environ["CRYPTOGRAPHY_OPENSSL_NO_LEGACY"] = "1"
-
-    # Using Cython to speed up compile time
-    # nuitka-project: --nofollow-import-to=bumble.hci
-    sys.modules["bumble.hci"] = importlib.import_module("vendor.bumble.hci")
-    # nuitka-project: --nofollow-import-to=bumble.l2cap
-    sys.modules["bumble.l2cap"] = importlib.import_module("vendor.bumble.l2cap")
 
 if __name__ == "__main__":
     from nxbt.cli import main
