@@ -20,10 +20,10 @@ install-deps:
 	@SUDO=; if [ "$$(id -u)" -ne 0 ]; then SUDO=sudo; fi; \
 	if [ -f /etc/alpine-release ]; then \
 		$$SUDO apk update && \
-		$$SUDO apk add --no-cache git ccache make gcc g++ python3 python3-dev libcap-dev libusb-dev dbus-dev patchelf procps bluez; \
+		$$SUDO apk add --no-cache git ccache make gcc g++ python3 python3-pip python3-venv python3-dev libcap-dev libusb-dev dbus-dev patchelf procps bluez; \
 	elif [ -f /etc/debian_version ]; then \
 		$$SUDO apt update && \
-		$$SUDO apt install -y git wget ccache make gcc g++ python3 python3-dev \
+		$$SUDO apt install -y git wget ccache make gcc g++ python3 python3-pip python3-venv python3-dev \
 			libcap2 libcap-dev libusb-1.0-0-dev libssl-dev libdbus-1-dev patchelf procps bluez; \
 	elif [ -f /etc/msystem ]; then \
 		case "$$MSYSTEM" in \
@@ -50,7 +50,7 @@ install-deps:
 	fi
 
 venv:
-	@test -d .venv/bin || python -m venv .venv --system-site-packages
+	@test -d .venv/bin || python3 -m venv .venv --system-site-packages
 
 pip-deps: venv
 	$(PIP) install -e . "$(NUITKA_GIT)"
