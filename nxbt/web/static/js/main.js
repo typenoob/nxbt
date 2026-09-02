@@ -19,6 +19,7 @@ let HTML_STATUS_INDICATOR_LIGHT = document.getElementById("status-indicator-ligh
 let HTML_STATUS_INDICATOR_TEXT = document.getElementById("status-indicator-text");
 let HTML_KEYBOARD_MAP = document.getElementById("keyboard-map");
 let HTML_CONTROLLER_MAP = document.getElementById("controller-map");
+let HTML_INPUT_DEVICE = document.getElementById("input-device");
 let HTML_ERROR_DISPLAY = document.getElementById("error-display");
 let HTML_ALERT_DIALOG = document.getElementById("alert-dialog");
 let HTML_ALERT_DIALOG_TITLE = document.getElementById("alert-dialog-title");
@@ -39,6 +40,8 @@ const InputDevice = {
     GAMEPAD: "gamepad"
 }
 let INPUT_DEVICE = InputDevice.KEYBOARD;
+const GAMEPAD_DEADZONE = 0.2;
+let prevGamepadActive = {};
 
 const ControllerType = {
     PRO_CONTROLLER: "pro_controller",
@@ -144,6 +147,7 @@ let INPUT_PACKET = {
     "B": false,
     "A": false
 }
+const IDLE_INPUT_PACKET = JSON.parse(JSON.stringify(INPUT_PACKET));
 let INPUT_PACKET_OLD = JSON.parse(JSON.stringify(INPUT_PACKET));
 
 let PRO_CONTROLLER_DISPLAY = {
@@ -261,25 +265,32 @@ window.onload = function() {
 
 // Keydown listener
 function globalKeydownHandler(evt) {
-    if (INPUT_DEVICE !== InputDevice.KEYBOARD) {
-        return
-    }
-
     evt = evt || window.event;
     // Prevent scrolling on keypress
     if([32, 37, 38, 39, 40].indexOf(evt.keyCode) > -1) {
         evt.preventDefault();
     }
 
-    if (Object.keys(KEYMAP).indexOf(JSON.stringify(evt.keyCode)) > -1) {
-        control = KEYMAP[evt.keyCode];
-        if (LEFT_STICK.indexOf(control) > -1) {
-            INPUT_PACKET["L_STICK"][control] = true;
-        } else if (RIGHT_STICK.indexOf(control) > -1) {
-            INPUT_PACKET["R_STICK"][control] = true;
-        } else {
-            INPUT_PACKET[control] = true;
+    if (Object.keys(KEYMAP).indexOf(JSON.stringify(evt.keyCode)) === -1) {
+        return;
+    }
+
+    // Rising-edge only: ignore key-repeat so a held key cannot steal
+    // focus back from a gamepad on every auto-repeat.
+    if (INPUT_DEVICE !== InputDevice.KEYBOARD) {
+        if (evt.repeat) {
+            return;
         }
+        setInputDevice(InputDevice.KEYBOARD);
+    }
+
+    control = KEYMAP[evt.keyCode];
+    if (LEFT_STICK.indexOf(control) > -1) {
+        INPUT_PACKET["L_STICK"][control] = true;
+    } else if (RIGHT_STICK.indexOf(control) > -1) {
+        INPUT_PACKET["R_STICK"][control] = true;
+    } else {
+        INPUT_PACKET[control] = true;
     }
 }
 document.onkeydown = globalKeydownHandler;
@@ -315,31 +326,43 @@ function enableKeyHandlers() {
     document.onkeyup = globalKeyupHandler;
 }
 
+function gamepadOptionId(index) {
+    return "gamepad-" + index;
+}
+
 window.addEventListener("gamepadconnected", function(evt) {
-    gamepadIndex = evt.gamepad.index;
-    gamepadID = evt.gamepad.id;
+    const gamepadIndex = evt.gamepad.index;
+    const gamepadID = evt.gamepad.id;
     console.log("Gamepad connected with ID:", gamepadID);
 
-    inputs = document.getElementById("input-device");
-
-    input = document.createElement("option");
+    const optionId = gamepadOptionId(gamepadIndex);
+    let input = document.getElementById(optionId);
+    if (!input) {
+        input = document.createElement("option");
+        input.id = optionId;
+        HTML_INPUT_DEVICE.appendChild(input);
+    }
     input.innerHTML = gamepadID;
     input.setAttribute("value", "gamepad");
     input.setAttribute("index", gamepadIndex);
-    input.id = gamepadID;
-
-    inputs.appendChild(input);
+    if (INPUT_DEVICE === InputDevice.GAMEPAD &&
+            Number(CONTROLLER_INDEX) === gamepadIndex) {
+        input.selected = true;
+    }
 });
 
 window.addEventListener("gamepaddisconnected", function(evt) {
-    INPUT_DEVICE = InputDevice.KEYBOARD;
+    const gamepadIndex = evt.gamepad.index;
+    const gamepadInput = document.getElementById(gamepadOptionId(gamepadIndex));
+    if (gamepadInput) {
+        gamepadInput.remove();
+    }
+    delete prevGamepadActive[gamepadIndex];
 
-    HTML_CONTROLLER_MAP.classList.add('hidden');
-    HTML_KEYBOARD_MAP.classList.remove('hidden');
-
-    CONTROLLER_INDEX = false;
-    gamepadInput = document.getElementById(evt.gamepad.id);
-    gamepadInput.remove();
+    if (INPUT_DEVICE === InputDevice.GAMEPAD &&
+            Number(CONTROLLER_INDEX) === gamepadIndex) {
+        setInputDevice(InputDevice.KEYBOARD);
+    }
 });
 
 /**********************************************/
@@ -523,30 +546,75 @@ function changeStatusIndicatorState(className, text) {
     HTML_STATUS_INDICATOR_TEXT.innerHTML = text;
 }
 
-function changeInput(evt) {
-    inputType = evt.target.value
+function resetInputPacket() {
+    INPUT_PACKET = JSON.parse(JSON.stringify(IDLE_INPUT_PACKET));
+}
 
-    if (inputType === InputDevice.KEYBOARD) {
-        INPUT_DEVICE = InputDevice.KEYBOARD;
+function isGamepadActive(gp) {
+    if (!gp) {
+        return false;
+    }
+    for (let i = 0; i < gp.buttons.length; i++) {
+        if (gp.buttons[i] && gp.buttons[i].pressed) {
+            return true;
+        }
+    }
+    for (let i = 0; i < gp.axes.length; i++) {
+        if (Math.abs(gp.axes[i]) > GAMEPAD_DEADZONE) {
+            return true;
+        }
+    }
+    return false;
+}
 
-        document.onkeydown = globalKeydownHandler;
-        document.onkeyup = globalKeyupHandler;
+function scanGamepadActivity() {
+    const pads = navigator.getGamepads();
+    for (let i = 0; i < pads.length; i++) {
+        const active = isGamepadActive(pads[i]);
+        const wasActive = !!prevGamepadActive[i];
+        prevGamepadActive[i] = active;
+        if (active && !wasActive) {
+            const isCurrent = INPUT_DEVICE === InputDevice.GAMEPAD &&
+                Number(CONTROLLER_INDEX) === i;
+            if (!isCurrent) {
+                setInputDevice(InputDevice.GAMEPAD, i);
+            }
+        }
+    }
+}
 
+function setInputDevice(type, gamepadIndex) {
+    const nextIndex = type === InputDevice.GAMEPAD ? Number(gamepadIndex) : false;
+    if (INPUT_DEVICE === type && CONTROLLER_INDEX === nextIndex) {
+        return;
+    }
+
+    INPUT_DEVICE = type;
+    CONTROLLER_INDEX = nextIndex;
+    resetInputPacket();
+
+    if (type === InputDevice.KEYBOARD) {
         HTML_CONTROLLER_MAP.classList.add('hidden');
         HTML_KEYBOARD_MAP.classList.remove('hidden');
-
-        CONTROLLER_INDEX = false;
-    } else if (inputType == InputDevice.GAMEPAD) {
-        INPUT_DEVICE = InputDevice.GAMEPAD;
-
-        document.onkeydown = false;
-        document.onkeyup = false;
-
+        HTML_INPUT_DEVICE.value = InputDevice.KEYBOARD;
+    } else if (type === InputDevice.GAMEPAD) {
         HTML_KEYBOARD_MAP.classList.add('hidden');
         HTML_CONTROLLER_MAP.classList.remove('hidden');
+        const option = document.getElementById(gamepadOptionId(nextIndex));
+        if (option) {
+            option.selected = true;
+        }
+    }
+}
 
-        selectedGamepad = evt.target.children[evt.target.selectedIndex]
-        CONTROLLER_INDEX = selectedGamepad.getAttribute("index");
+function changeInput(evt) {
+    const inputType = evt.target.value;
+
+    if (inputType === InputDevice.KEYBOARD) {
+        setInputDevice(InputDevice.KEYBOARD);
+    } else if (inputType == InputDevice.GAMEPAD) {
+        const selectedGamepad = evt.target.children[evt.target.selectedIndex];
+        setInputDevice(InputDevice.GAMEPAD, selectedGamepad.getAttribute("index"));
     }
 }
 
@@ -587,6 +655,9 @@ function updateLoader() {
 
 function updateGamepadInput() {
     let gp = navigator.getGamepads()[CONTROLLER_INDEX];
+    if (!gp) {
+        return;
+    }
     INPUT_PACKET["L_STICK"]["X_VALUE"] = gp.axes[0] * 100;
     INPUT_PACKET["L_STICK"]["Y_VALUE"] = gp.axes[1] * -100;
     INPUT_PACKET["L_STICK"]["PRESSED"] = gp["buttons"][10]["pressed"];
@@ -657,6 +728,7 @@ function eventLoop() {
     if (!eventLoopActive || NXBT_CONTROLLER_INDEX === false || !STATE[NXBT_CONTROLLER_INDEX]) {
         return;
     }
+    scanGamepadActivity();
     // Update x/y ratio for the sticks based on
     // pressed buttons if we're using a keyboard
     if (INPUT_DEVICE == InputDevice.KEYBOARD) {
