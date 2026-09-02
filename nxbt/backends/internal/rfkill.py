@@ -19,7 +19,6 @@ Total: 8 bytes.
 See ``linux/rfkill.h`` for the canonical C definition.
 """
 
-import fcntl
 import logging
 import os
 import re
@@ -312,6 +311,8 @@ class RfkillClient:
         if self._fd is None:
             raise OSError("rfkill device is not open")
         try:
+            import fcntl
+
             fcntl.ioctl(self._fd, RFKILL_IOCTL_NOINPUT)
             logger.debug("rfkill: disabled kernel input handler")
         except OSError:
