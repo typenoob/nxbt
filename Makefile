@@ -1,9 +1,9 @@
 .PHONY: all install-deps venv pip-deps build build-uv build-pip install docker
 
 BITNESS := $(shell getconf LONG_BIT 2>/dev/null || echo 64)
-NUITKA_GIT := nuitka @ git+https://github.com/typenoob/Nuitka.git@mingw-filename
+NUITKA_GIT := nuitka @ git+https://github.com/nuitka/Nuitka.git@factory
 
-ifdef MSYSTEM
+ifeq ($(OS),Windows_NT)
 NXBT_OUT := release/nxbt.exe
 NXBT_BIN := nxbt.exe
 else
@@ -11,8 +11,8 @@ NXBT_OUT := release/nxbt
 NXBT_BIN := nxbt
 endif
 
-PYTHON := .venv/bin/python
-PIP    := .venv/bin/pip
+PYTHON := .msys2-venv/bin/python
+PIP    := .msys2-venv/bin/pip
 
 all: install-deps build
 
@@ -25,7 +25,7 @@ install-deps:
 		$$SUDO apt update && \
 		$$SUDO apt install -y git wget ccache make gcc g++ python3 python3-pip python3-venv python3-dev \
 			libcap2 libcap-dev libusb-1.0-0-dev libssl-dev libdbus-1-dev patchelf procps bluez; \
-	elif [ -f /etc/msystem ]; then \
+	elif [ -n "$$MSYSTEM" ]; then \
 		case "$$MSYSTEM" in \
 			MINGW64|UCRT64) ;; \
 			*) echo "error: Got MSYSTEM=$$MSYSTEM"; exit 1 ;; \
@@ -49,11 +49,11 @@ install-deps:
 		echo "Unsupported OS. Only Debian, Ubuntu, Alpine and MSYS2 MINGW64/UCRT64 are supported. Skipping dependency installation."; \
 	fi
 
-venv:
-	@test -d .venv/bin || python3 -m venv .venv --system-site-packages
+msys2-venv:
+	@test -d .msys2-venv/bin || python3 -m venv .msys2-venv --system-site-packages
 
-pip-deps: venv
-	$(PIP) install -e . "$(NUITKA_GIT)"
+pip-deps: msys2-venv
+	$(PIP) install --extra-index-url https://pypi.org/simple/ -e . "$(NUITKA_GIT)"
 
 build-uv:
 	uv run --no-managed-python nuitka nxbt
@@ -61,15 +61,15 @@ build-uv:
 build-pip: pip-deps
 	$(PYTHON) -m nuitka nxbt
 
-build:
+build: install-deps
 	# uv is unsupported on MSYS2 MINGW64/UCRT64 Python; use pip instead.
 	# https://github.com/astral-sh/uv/issues/3573
-	@if [ -f /etc/msystem ]; then \
+	@if [ -n "$$MSYSTEM" ]; then \
 		$(MAKE) build-pip; \
 	elif command -v uv >/dev/null 2>&1; then \
 		$(MAKE) build-uv; \
 	else \
-		$(MAKE) build-pip; \
+		echo "Error! Please build on MSYS2 or with uv installed."; \
 	fi
 
 install:
