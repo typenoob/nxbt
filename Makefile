@@ -7,6 +7,7 @@ ifeq ($(OS),Windows_NT)
 NXBT_OUT := release/nxbt.exe
 NXBT_BIN := nxbt.exe
 else
+UV_FLAGS := --no-managed-python
 NXBT_OUT := release/nxbt
 NXBT_BIN := nxbt
 endif
@@ -56,7 +57,7 @@ pip-deps: msys2-venv
 	$(PIP) install --extra-index-url https://pypi.org/simple/ -e . "$(NUITKA_GIT)"
 
 build-uv:
-	uv run --no-managed-python nuitka nxbt
+	uv run $(UV_FLAGS) nuitka nxbt
 
 build-pip: pip-deps
 	$(PYTHON) -m nuitka nxbt
