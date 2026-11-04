@@ -129,6 +129,14 @@ parser.add_argument(
     choices=list(BACKENDS.keys()),
     help="""Specifies the Bluetooth backend to use. Defaults to bumble.""",
 )
+parser.add_argument(
+    "-f",
+    "--firmware",
+    required=False,
+    default="23.0.1",
+    type=str,
+    help="""Specifies the firmware version to use for the demo. Defaults to 23.0.1""",
+)
 
 
 MACRO = """
