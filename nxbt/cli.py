@@ -139,8 +139,8 @@ parser.add_argument(
 )
 
 
-MACRO = """
-B 0.1s
+MACRO = {
+    "23.0.1": """B 0.1s
 0.5s
 B 0.1s
 0.5s
@@ -193,7 +193,57 @@ A 0.1s
 A 0.1s
 5.0s
 
-"""
+""",
+    "12.0.0": """B 0.1s
+0.5s
+B 0.1s
+0.5s
+B 0.1s
+0.5s
+B 0.1s
+1.5s
+DPAD_RIGHT 0.075s
+0.075s
+A 0.1s
+1.5s
+LOOP 12
+    DPAD_DOWN 0.075s
+    0.075s
+A 0.1s
+0.25s
+DPAD_DOWN 0.93s
+A 0.1s
+0.25s
+L_STICK_PRESS 0.1s
+1.0s
+L_STICK@-100+000 0.75s
+L_STICK@+000+100 0.75s
+L_STICK@+100+000 0.75s
+L_STICK@+000-100 0.75s
+B 0.1s
+0.25s
+R_STICK_PRESS 0.1s
+1.0s
+R_STICK@-100+000 0.75s
+R_STICK@+000+100 0.75s
+R_STICK@+100+000 0.75s
+R_STICK@+000-100 0.75s
+B 0.1s
+0.1s
+B 0.1s
+0.1s
+B 0.1s
+0.1s
+B 0.1s
+0.4s
+DPAD_LEFT 0.1s
+0.1s
+A 0.1s
+1.5s
+A 0.1s
+5.0s
+
+"""}
 
 
 def random_colour():
@@ -263,7 +313,11 @@ def demo(args):
     )
 
     print("Running Demo...")
-    macro_id = nx.macro(index, MACRO, block=False)
+    if args.firmware <= "12.0.0":
+        demo_macro = MACRO["12.0.0"]
+    else:
+        demo_macro = MACRO["23.0.1"]
+    macro_id = nx.macro(index, demo_macro, block=False)
     while macro_id not in nx.state[index]["finished_macros"]:
         state = nx.state[index]
         if state["state"] == "crashed":
