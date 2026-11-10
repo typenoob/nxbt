@@ -5,6 +5,7 @@ import os
 import traceback
 from sys import exit
 
+from packaging.specifiers import SpecifierSet
 from packaging.version import Version as FirmwareVersion
 
 from .setcap import set_file_cap
@@ -142,12 +143,11 @@ parser.add_argument(
 )
 
 
-# Demo macro for each firmware version it has been verified against. Versions
-# without an exact entry fall back to DEMO_MACRO_DEFAULT. Widen this to ranges
-# (e.g. `firmware >= FirmwareVersion("23.0.0")`) once neighbouring versions
-# are known to share a macro.
+# Demo macro for each firmware range it has been verified against. The first
+# range containing the version wins, so keep the ranges non-overlapping and
+# put any narrower window before the broader one it would sit inside.
 DEMO_MACROS = {
-    FirmwareVersion("23.0.1"): """B 0.1s
+    SpecifierSet(">=23.0.1,<24.0"): """B 0.1s
 0.5s
 B 0.1s
 0.5s
@@ -206,7 +206,7 @@ A 0.1s
 }
 
 # The macro that shipped before the Switch 2 menu layout change, used for every
-# firmware version without an exact entry in DEMO_MACROS.
+# firmware version outside the ranges in DEMO_MACROS.
 DEMO_MACRO_DEFAULT = """B 0.1s
 0.5s
 B 0.1s
@@ -260,8 +260,11 @@ A 0.1s
 
 
 def demo_macro_for_firmware(firmware: FirmwareVersion) -> str:
-    """Return the demo macro recorded for firmware, or the default macro."""
-    return DEMO_MACROS.get(firmware, DEMO_MACRO_DEFAULT)
+    """Return the demo macro whose verified range covers firmware."""
+    for verified_range, macro in DEMO_MACROS.items():
+        if verified_range.contains(firmware):
+            return macro
+    return DEMO_MACRO_DEFAULT
 
 
 def random_colour():
