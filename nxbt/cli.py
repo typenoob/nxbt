@@ -5,6 +5,8 @@ import os
 import traceback
 from sys import exit
 
+from packaging.version import Version as FirmwareVersion
+
 from .setcap import set_file_cap
 from .nxbt import Nxbt, PRO_CONTROLLER
 from .backends import BACKENDS
@@ -134,13 +136,18 @@ parser.add_argument(
     "--firmware",
     required=False,
     default="23.0.1",
-    type=str,
-    help="""Specifies the firmware version to use for the demo. Defaults to 23.0.1""",
+    type=FirmwareVersion,
+    help="""Specifies the Switch firmware version used to pick the demo macro.
+                    Defaults to 23.0.1.""",
 )
 
 
-MACRO = {
-    "23.0.1": """B 0.1s
+# Demo macro for each firmware version it has been verified against. Versions
+# without an exact entry fall back to DEMO_MACRO_DEFAULT. Widen this to ranges
+# (e.g. `firmware >= FirmwareVersion("23.0.0")`) once neighbouring versions
+# are known to share a macro.
+DEMO_MACROS = {
+    FirmwareVersion("23.0.1"): """B 0.1s
 0.5s
 B 0.1s
 0.5s
@@ -196,7 +203,11 @@ A 0.1s
 5.0s
 
 """,
-    "12.0.0": """B 0.1s
+}
+
+# The macro that shipped before the Switch 2 menu layout change, used for every
+# firmware version without an exact entry in DEMO_MACROS.
+DEMO_MACRO_DEFAULT = """B 0.1s
 0.5s
 B 0.1s
 0.5s
@@ -245,7 +256,12 @@ A 0.1s
 A 0.1s
 5.0s
 
-"""}
+"""
+
+
+def demo_macro_for_firmware(firmware: FirmwareVersion) -> str:
+    """Return the demo macro recorded for firmware, or the default macro."""
+    return DEMO_MACROS.get(firmware, DEMO_MACRO_DEFAULT)
 
 
 def random_colour():
@@ -315,11 +331,7 @@ def demo(args):
     )
 
     print("Running Demo...")
-    if args.firmware <= "12.0.0":
-        demo_macro = MACRO["12.0.0"]
-    else:
-        demo_macro = MACRO["23.0.1"]
-    macro_id = nx.macro(index, demo_macro, block=False)
+    macro_id = nx.macro(index, demo_macro_for_firmware(args.firmware), block=False)
     while macro_id not in nx.state[index]["finished_macros"]:
         state = nx.state[index]
         if state["state"] == "crashed":
