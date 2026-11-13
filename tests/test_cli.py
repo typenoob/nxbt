@@ -3,7 +3,12 @@
 
 import pytest
 from unittest.mock import patch, MagicMock
-from nxbt.cli import main
+from nxbt.cli import (
+    DEMO_MACRO_DEFAULT,
+    FirmwareVersion,
+    demo_macro_for_firmware,
+    main,
+)
 from nxbt import __version__
 
 
@@ -83,6 +88,44 @@ def test_demo_command(mock_nxbt, capsys):
     captured = capsys.readouterr()
     assert "Running Demo..." in captured.out
     assert "Finished!" in captured.out
+
+
+def demo_macro_sent(mock_nxbt, firmware):
+    """Run the demo against a firmware and return the macro handed to Nxbt."""
+    instance = mock_nxbt.return_value
+    instance.create_controller.return_value = 0
+    instance.macro.return_value = "macro_id"
+    instance.state = {
+        0: {"state": "connected", "finished_macros": ["macro_id"], "errors": []}
+    }
+
+    main(["demo", "-f", firmware])
+    return instance.macro.call_args[0][1]
+
+
+def test_demo_firmware_version(mock_nxbt):
+    switch2_macro = demo_macro_for_firmware(FirmwareVersion("23.0.1"))
+    assert switch2_macro != DEMO_MACRO_DEFAULT
+
+    # Inside the verified range: >=23.0.1,<24.0, ordered numerically.
+    for firmware in ("23.0.1", "23.0.10", "23.2.0", "23.5.0"):
+        assert demo_macro_sent(mock_nxbt, firmware) == switch2_macro
+    # Outside it, on either side: the pre-Switch 2 layout.
+    assert demo_macro_sent(mock_nxbt, "23.0.0") == DEMO_MACRO_DEFAULT
+    assert demo_macro_sent(mock_nxbt, "24.0.0") == DEMO_MACRO_DEFAULT
+    assert demo_macro_sent(mock_nxbt, "12.0.0") == DEMO_MACRO_DEFAULT
+
+
+def test_firmware_comparison_is_numeric_not_lexicographic():
+    """A string sort would rank "9.0.0" above "23.0.1" and match the range."""
+    for firmware in ("2.0.0", "9.0.0", "10.2.0", "13.0.0", "19.0.1", "24.0.0"):
+        assert demo_macro_for_firmware(FirmwareVersion(firmware)) is DEMO_MACRO_DEFAULT
+
+
+def test_demo_rejects_an_unparsable_firmware():
+    with pytest.raises(SystemExit) as exc:
+        main(["demo", "-f", "switch-2"])
+    assert exc.value.code == 2
 
 
 def test_macro_command_no_args_fails(capsys):

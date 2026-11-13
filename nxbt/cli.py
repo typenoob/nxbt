@@ -5,6 +5,9 @@ import os
 import traceback
 from sys import exit
 
+from packaging.specifiers import SpecifierSet
+from packaging.version import Version as FirmwareVersion
+
 from .setcap import set_file_cap
 from .nxbt import Nxbt, PRO_CONTROLLER
 from .backends import BACKENDS
@@ -129,10 +132,82 @@ parser.add_argument(
     choices=list(BACKENDS.keys()),
     help="""Specifies the Bluetooth backend to use. Defaults to bumble.""",
 )
+parser.add_argument(
+    "-f",
+    "--firmware",
+    required=False,
+    default="23.0.1",
+    type=FirmwareVersion,
+    help="""Specifies the Switch firmware version used to pick the demo macro.
+                    Defaults to 23.0.1.""",
+)
 
 
-MACRO = """
+# Demo macro for each firmware range it has been verified against. The first
+# range containing the version wins, so keep the ranges non-overlapping and
+# put any narrower window before the broader one it would sit inside.
+DEMO_MACROS = {
+    SpecifierSet(">=23.0.1,<24.0"): """B 0.1s
+0.5s
 B 0.1s
+0.5s
+B 0.1s
+0.5s
+B 0.1s
+1.5s
+DPAD_RIGHT 0.075s
+0.075s
+DPAD_RIGHT 0.075s
+0.075s
+A 0.1s
+1.5s
+LOOP 13
+    DPAD_DOWN 0.075s
+    0.075s
+A 0.1s
+0.25s
+DPAD_DOWN 0.93s
+A 0.1s
+0.25s
+A 0.1s
+0.25s
+L_STICK@-100+000 1.50s
+1.0s
+L_STICK@-100+000 0.75s
+L_STICK@+000+100 0.75s
+L_STICK@+100+000 0.75s
+L_STICK@+000-100 0.75s
+B 0.1s
+0.25s
+R_STICK@-100+000 1.50s
+1.0s
+R_STICK@-100+000 0.75s
+R_STICK@+000+100 0.75s
+R_STICK@+100+000 0.75s
+R_STICK@+000-100 0.75s
+B 0.1s
+0.1s
+B 0.1s
+0.1s
+B 0.1s
+0.1s
+B 0.1s
+0.4s
+DPAD_LEFT 0.1s
+0.1s
+DPAD_LEFT 0.1s
+0.1s
+A 0.1s
+1.5s
+A 0.1s
+5.0s
+
+""",
+}
+
+# The macro that shipped before the Switch 2 menu layout change, used for every
+# firmware version outside the ranges in DEMO_MACROS.
+DEMO_MACRO_DEFAULT = """B 0.1s
 0.5s
 B 0.1s
 0.5s
@@ -182,6 +257,14 @@ A 0.1s
 5.0s
 
 """
+
+
+def demo_macro_for_firmware(firmware: FirmwareVersion) -> str:
+    """Return the demo macro whose verified range covers firmware."""
+    for verified_range, macro in DEMO_MACROS.items():
+        if verified_range.contains(firmware):
+            return macro
+    return DEMO_MACRO_DEFAULT
 
 
 def random_colour():
@@ -251,7 +334,7 @@ def demo(args):
     )
 
     print("Running Demo...")
-    macro_id = nx.macro(index, MACRO, block=False)
+    macro_id = nx.macro(index, demo_macro_for_firmware(args.firmware), block=False)
     while macro_id not in nx.state[index]["finished_macros"]:
         state = nx.state[index]
         if state["state"] == "crashed":
